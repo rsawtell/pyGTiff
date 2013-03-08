@@ -400,7 +400,23 @@ already true of the secondTIF parameter, this method will simply return secondTI
                 lat = gt[3]+gt[4]*mgx+gt[5]*mgy
                 
                 return (lon,lat)
-        else:
-            if(point==None):
-                return None
-            return (x,y)
+            
+    def getXY(self, lon,lat):
+        '''Returns the x,y pixel coordinates of a Geolocated point in the image'''
+        
+        #geotiff must have projection information for this to work
+        if(self.projection!=None and self.geoTransform!=None):
+            gt = self.geoTransform
+            
+            lon = lon-gt[0]
+            lat = lat-gt[3]
+            
+            a = np.matrix(((gt[1:3]),(gt[4:6])))
+            
+            i = a.getI()
+            print i
+            
+            vals = i*[[lon],[lat]]
+            
+            return int(vals[0]),int(vals[1])
+            
