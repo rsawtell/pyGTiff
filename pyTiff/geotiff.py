@@ -329,6 +329,7 @@ already true of the secondTIF parameter, this method will simply return secondTI
 
         try:
             from warpCopy import warpCopy
+            d=None
             
             if not isinstance(secondTIF,geotiff):
                 raise TypeError("secondTIF must be a valid geotiff object")
@@ -347,6 +348,9 @@ already true of the secondTIF parameter, this method will simply return secondTI
                     nodata = [None for x in xrange(bands)]
                     
                 tp = secondTIF.data.dtype
+                d = tempfile.mkdtemp(prefix="pytiff")
+                secondTIF = secondTIF.geocopy(os.path.join(d,"temptif.tif"),secondTIF.getData(tp=None))
+                
             else:
                 #get default nodata values
                 ds = gdal.Open(secondTIF.getPath(),gdal.GA_ReadOnly)
@@ -374,10 +378,11 @@ already true of the secondTIF parameter, this method will simply return secondTI
             tmp.nodata = nodata
             
             #create temporary file if output file is not desired
-            d=None
             if(outputTIF==None):
-                d = tempfile.mkdtemp(prefix="pytiff")
-                outputTIF = os.path.join(d,'secondTIF.getPath()[:-4]+"_rpj2"+self.getName()')
+                if d==None:
+                    d = tempfile.mkdtemp(prefix="pytiff")
+                    
+                outputTIF = os.path.join(d,'rpj.tif')
             
             tmp.geocopy(outputTIF)
             

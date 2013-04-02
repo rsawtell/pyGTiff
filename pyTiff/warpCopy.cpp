@@ -48,13 +48,11 @@ static PyObject * warpCopy(PyObject *self, PyObject *args)
     psWarpOptions->hSrcDS = hSrcDS;
     psWarpOptions->hDstDS = hDstDS;
 
-    psWarpOptions->nBandCount = 1;
+    psWarpOptions->nBandCount = PyList_Size(nodata);
     psWarpOptions->panSrcBands = 
         (int *) CPLMalloc(sizeof(int) * psWarpOptions->nBandCount );
-    psWarpOptions->panSrcBands[0] = 1;
     psWarpOptions->panDstBands = 
         (int *) CPLMalloc(sizeof(int) * psWarpOptions->nBandCount );
-    psWarpOptions->panDstBands[0] = 1;
     
     //add nodata values
     psWarpOptions->padfSrcNoDataReal = (double *) CPLMalloc(sizeof(double) * psWarpOptions->nBandCount);
@@ -64,6 +62,8 @@ static PyObject * warpCopy(PyObject *self, PyObject *args)
     
     for(int i=0;i<PyList_Size(nodata);i++)
     {
+        psWarpOptions->panSrcBands[i] = i+1;
+        psWarpOptions->panDstBands[i] = i+1;
         realObject = PyList_GetItem(nodata,i);
         value = PyFloat_AsDouble(realObject);
         
