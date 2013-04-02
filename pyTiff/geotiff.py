@@ -1,10 +1,12 @@
+#!/usr/bin/env python
+
 try:
     from osgeo import gdal
 except ImportError:
     import gdal
     
 import numpy as np
-import os
+import tempfile, os, subprocess
 
 def nptype2gdal(nptype):
     '''Convert numpy data type to GDAL data type'''
@@ -43,7 +45,7 @@ def gdaltype2np(gtype):
         return np.float64
 
 class geotiff:
-    '''Convenience wrapper for GeoTIFF files.'''
+    '''Convenience wrapper for handling GeoTIFF files using GDAL.'''
     
     def __init__(self,inputTIF,band=None):
         '''Create a geotiff instance using either a file or data.
@@ -263,6 +265,8 @@ band - if the image contains multiple bands this specifies that only a single ba
         if not self.data == None:
             if self.data.ndim==3 and not band==None:
                 na  = self.data[band,yoff:yoff+ysize,xoff:xoff+xsize]
+            elif self.data.ndim==3:
+                na  = self.data[:,yoff:yoff+ysize,xoff:xoff+xsize]
             else:
                 na = self.data[yoff:yoff+ysize,xoff:xoff+xsize]
             
@@ -369,17 +373,33 @@ already true of the secondTIF parameter, this method will simply return secondTI
             tmp = self.geovirt(na)
             tmp.nodata = nodata
             
+            #create temporary file if output file is not desired
+            d=None
             if(outputTIF==None):
-                outputTIF = secondTIF.getPath()[:-4]+"_rpj2"+self.getName()
+                d = tempfile.mkdtemp(prefix="pytiff")
+                outputTIF = os.path.join(d,'secondTIF.getPath()[:-4]+"_rpj2"+self.getName()')
             
             tmp.geocopy(outputTIF)
             
             #perform the warp
             warpCopy(secondTIF.getPath(),tmp.getPath(),nodata)
-            return geotiff(tmp.getPath())
+            
+            if d==None:   
+                return tmp
+            else:
+                #create virtual geotiff
+                gv = tmp.geovirt(tmp.getData(tp=None))
+                tmp = None
+                
+                #remove temporary file
+                subprocess.call(['rm','-r','-f',d])
+                return gv
             
         except ImportError:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
+        
+    def __getitem__(self,slc):
+        return self.getData(tp=None)[slc]
         
         
     def getCoord(self,point=None):
@@ -414,9 +434,7 @@ already true of the secondTIF parameter, this method will simply return secondTI
             a = np.matrix(((gt[1:3]),(gt[4:6])))
             
             i = a.getI()
-            print i
             
             vals = i*[[lon],[lat]]
             
             return int(vals[0]),int(vals[1])
-            
