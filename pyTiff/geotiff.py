@@ -118,7 +118,7 @@ these properties are the same as used by gdal.'''
             self.nodata = [None for x in xrange(self.bands)]
             
       
-    def geocopy(self, outputTIF, data=None, nodata=None, options=[]):
+    def geocopy(self, outputTIF, data=None, nodata=None, options=[], create=False):
         '''Create a new GeoTIFF file that posseses the same transform and projection as this geotiff, but with new data
         
 outputTIF - name of the new GeoTIFF to be created
@@ -168,7 +168,19 @@ disk and this object will be converted to a real geotiff'''
         
         #create a new GeoTIFF
         driver = gdal.GetDriverByName("GTiff")
+        
+        if(not os.path.isdir(os.path.dirname(outputTIF))):
+            if(create):
+                os.mkdir(os.path.dirname(outputTIF))
+            else:
+                raise IOError("Directory '"+os.path.dirname(outputTIF)+"' does not exist.")
+            
         dst_ds = driver.Create(outputTIF,self.width,self.height,bands,nptype2gdal(data.dtype),options)
+            
+        
+        if(dst_ds==None):
+            raise IOError("Error creating "+outputTIF)
+                
         
         #write projection information if known
         if(not (self.geoTransform==None or self.projection=="")):
