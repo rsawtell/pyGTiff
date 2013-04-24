@@ -9,7 +9,7 @@ gdal_vers='1.7.0'
 warpCopyExt = Extension('pyTiff.warpCopy', ['pyTiff/warpCopy.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
 
 setup (name = 'pyTiff',
-       version = '.15',
+       version = '.16',
        author = 'Reid Sawtell',
        author_email = "rwsawtel@mtu.edu",
        url = 'http://wiki.mtri.org/display/mtri/pyDepth#pyDepth',

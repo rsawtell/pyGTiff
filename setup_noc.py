@@ -3,7 +3,7 @@ from distutils.core import setup, Extension
 import numpy
 
 setup (name = 'pyTiff',
-       version = '.15',
+       version = '.16',
        author = 'Reid Sawtell',
        author_email = "rwsawtel@mtu.edu",
        url = 'http://wiki.mtri.org/display/mtri/pyDepth#pyDepth',
