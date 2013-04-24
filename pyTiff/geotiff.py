@@ -185,9 +185,9 @@ disk and this object will be converted to a real geotiff'''
                 dst_dr = dst_ds.GetRasterBand(x+1)
                 dst_dr.WriteArray(data[x])
                 
-                if(nodata != None and nodata[x]!=None):
+                if(nodata != None and x<len(nodata) and nodata[x]!=None):
                     dst_dr.SetNoDataValue(nodata[x])
-                elif(self.inputTIF==None and self.nodata[x]!=None):
+                elif(self.inputTIF==None and x<len(self.nodata) and self.nodata[x]!=None):
                     dst_dr.SetNoDataValue(self.nodata[x])
                     
         else:
