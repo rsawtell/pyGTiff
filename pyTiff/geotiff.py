@@ -169,7 +169,7 @@ disk and this object will be converted to a real geotiff'''
         #create a new GeoTIFF
         driver = gdal.GetDriverByName("GTiff")
         
-        if(not os.path.isdir(os.path.dirname(outputTIF))):
+        if(os.path.dirname(outputTIF) != '' and not os.path.isdir(os.path.dirname(outputTIF))):
             if(create):
                 os.mkdir(os.path.dirname(outputTIF))
             else:
@@ -265,7 +265,7 @@ band - if the image contains multiple bands this specifies that only a single ba
         
         #setting band to -1 returns an array filled with ones with the same dimensions as a single band from this raster
         if band == -1:
-            return np.ones((self.width,self.height),dtype=tp)
+            return np.ones((self.height,self.width),dtype=tp)
             
         if xsize==None:
             xsize=self.width
@@ -405,7 +405,7 @@ already true of the secondTIF parameter, this method will simply return secondTI
                 return tmp
             else:
                 #create virtual geotiff
-                gv = tmp.geovirt(tmp.getData(tp=None))
+                gv = tmp.geovirt(tmp.getData(tp=None),nodata=nodata)
                 tmp = None
                 
                 #remove temporary file
