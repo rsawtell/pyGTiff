@@ -443,14 +443,17 @@ wkb - well known binary, should be in string format, for example the shapely .wk
             if self.projection!=None and srcSRS!=None:
                 mode=0
                 
-                if(srcSRS.startswith('EPSG:') or srcSRS.startswith('epsg:') or srcSRS.startswith("Epsg:")):
-                    srcSRS = srcSRS[5:]
-                    mode=1
-                elif(type(srcSRS)==int):
+                if(type(srcSRS)==int):
                     mode=1
                     srcSRS = repr(srcSRS)
+                elif(srcSRS.startswith('EPSG:') or srcSRS.startswith('epsg:') or srcSRS.startswith("Epsg:")):
+                    srcSRS = srcSRS[5:]
+                    mode=1
+
                 elif(srcSRS.startswith('+')):
                     mode=2
+                    
+                print mode
                 bytes = shapeTransform(bytes,srcSRS,self.projection,mode)
                 
             return shapeSlice(np.array(gt,dtype=np.float32),bytes,self.width,self.height)

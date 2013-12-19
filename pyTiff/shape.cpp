@@ -220,25 +220,24 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
     if(shape.importFromWkb(sdata)) return NULL;
     
     OGRSpatialReference srs = OGRSpatialReference();
-    if(srs.importFromWkt((char**)&srcWKT)) return NULL;
-    
-    OGRSpatialReference dst = OGRSpatialReference();
     
     switch(mode)
     {
         case 0://WKT
-            if(dst.importFromWkt((char**)&dstWKT)) return NULL;
+            if(srs.importFromWkt((char**)&srcWKT)) return NULL;
             break;
         case 1://EPSG
-            printf("%s %d\n",dstWKT,atoi(dstWKT));
-            if(dst.importFromEPSG(atoi(dstWKT))) return NULL;
+            if(srs.importFromEPSG(atoi(srcWKT))) return NULL;
             break;
         case 2://PROJ4
-            if(dst.importFromProj4(dstWKT)) return NULL;
+            if(srs.importFromProj4(srcWKT)) return NULL;
             break;
         default:
             return NULL;
     }
+    
+    OGRSpatialReference dst = OGRSpatialReference();
+    if(dst.importFromWkt((char**)&dstWKT)) return NULL;
     
     OGRCoordinateTransformation* trans = OGRCreateCoordinateTransformation(&srs,&dst);
     if(trans==NULL) return NULL;
