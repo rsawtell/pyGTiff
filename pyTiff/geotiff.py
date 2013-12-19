@@ -419,7 +419,7 @@ already true of the secondTIF parameter, this method will simply return secondTI
         except ImportError:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
         
-    def shapeIntersect(self,wkb):
+    def shapeIntersect(self,wkb,srcSRS=None):
         '''Generate an array containing the proportion of a pixel that overlaps with a polygon
 Multiplying the return value by the area per pixel will give you the area of overlap.
 Performing a boolean operation, eg. (retVal>.5), will give you an array that can be used to index the
@@ -430,14 +430,30 @@ wkb - well known binary, should be in string format, for example the shapely .wk
 '''
 
         try:
-            from shape import shapeSlice
+            from shape import shapeSlice,shapeTransform
             
             if(self.geoTransform == None):
                 gt = (0,1,0,0,0,1)
             else:
                 gt = self.geoTransform
                 
-            return shapeSlice(np.array(gt,dtype=np.float32),np.fromstring(wkb,dtype=np.uint8),self.width,self.height)
+            bytes = np.fromstring(wkb,dtype=np.uint8);
+
+            #reproject shape if possible
+            if self.projection!=None and srcSRS!=None:
+                mode=0
+                
+                if(srcSRS.startswith('EPSG:') or srcSRS.startswith('epsg:') or srcSRS.startswith("Epsg:")):
+                    srcSRS = srcSRS[5:]
+                    mode=1
+                elif(type(srcSRS)==int):
+                    mode=1
+                    srcSRS = repr(srcSRS)
+                elif(srcSRS.startswith('+')):
+                    mode=2
+                bytes = shapeTransform(bytes,srcSRS,self.projection,mode)
+                
+            return shapeSlice(np.array(gt,dtype=np.float32),bytes,self.width,self.height)
             
         except ImportError:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")

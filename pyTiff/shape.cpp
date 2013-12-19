@@ -138,8 +138,8 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
         
         for(int j=0;j<=width;j++)
         {
-            lat[i][j] = tdata[0] + tdata[1]*j + tdata[2]*i;
-            lon[i][j] = tdata[3] + tdata[4]*j + tdata[5]*i;
+            lon[i][j] = tdata[0] + tdata[1]*j + tdata[2]*i;
+            lat[i][j] = tdata[3] + tdata[4]*j + tdata[5]*i;
         }
     }
     
@@ -194,9 +194,70 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     return Py_BuildValue("N",(PyObject*)outdata); 
 }
 
+static PyObject * shapeTransform(PyObject *self, PyObject *args)
+{
+    PyArrayObject *shapebinary;
+    const char* srcWKT;
+    const char* dstWKT;
+    int mode;
+    
+    //get arguments
+    if (!PyArg_ParseTuple(args, "O!ssi", &PyArray_Type,&shapebinary,&srcWKT,&dstWKT,&mode))
+    {
+        return NULL;
+    }
+    
+    //check for errors
+    if (shapebinary == NULL || srcWKT==NULL || dstWKT==NULL)
+    {
+        return NULL;
+    }
+    
+    //convert wkb to polygon
+    byte* sdata = (byte*)shapebinary->data;
+    OGRPolygon shape = OGRPolygon();
+    
+    if(shape.importFromWkb(sdata)) return NULL;
+    
+    OGRSpatialReference srs = OGRSpatialReference();
+    if(srs.importFromWkt((char**)&srcWKT)) return NULL;
+    
+    OGRSpatialReference dst = OGRSpatialReference();
+    
+    switch(mode)
+    {
+        case 0://WKT
+            if(dst.importFromWkt((char**)&dstWKT)) return NULL;
+            break;
+        case 1://EPSG
+            printf("%s %d\n",dstWKT,atoi(dstWKT));
+            if(dst.importFromEPSG(atoi(dstWKT))) return NULL;
+            break;
+        case 2://PROJ4
+            if(dst.importFromProj4(dstWKT)) return NULL;
+            break;
+        default:
+            return NULL;
+    }
+    
+    OGRCoordinateTransformation* trans = OGRCreateCoordinateTransformation(&srs,&dst);
+    if(trans==NULL) return NULL;
+    
+    if(shape.transform(trans)) return NULL;
+    
+    int dimensions[1] = {shape.WkbSize()};
+    PyArrayObject* outdata = (PyArrayObject*)PyArray_FromDims(1,dimensions,PyArray_BYTE);
+    
+    shape.exportToWkb(wkbNDR,(byte*)outdata->data);
+    
+    //return data
+    return Py_BuildValue("N",(PyObject*)outdata);
+}
+
 static PyMethodDef shapeMethods[] = 
 {
     {"shapeSlice",shapeSlice, METH_VARARGS, "Get a boolean array indexing the intersection of a raster and a shape"},
+    {"shapeTransform",shapeTransform,METH_VARARGS, "Translate a shape from one projection into another"},
     {NULL, NULL, 0, NULL}
 };
 
