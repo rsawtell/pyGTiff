@@ -17,8 +17,9 @@ static PyObject * warpCopy(PyObject *self, PyObject *args)
     PyObject * nodata;
     PyObject * realObject;
     double value;
+    int resampleType;
     
-    if (!PyArg_ParseTuple(args, "ssO!", &inputName,&outputName,&PyList_Type,&nodata))
+    if (!PyArg_ParseTuple(args, "ssO!i", &inputName,&outputName,&PyList_Type,&nodata,&resampleType))
     {
         return NULL;
     }
@@ -41,6 +42,8 @@ static PyObject * warpCopy(PyObject *self, PyObject *args)
     
     GDALWarpOptions *psWarpOptions = GDALCreateWarpOptions();
     char** papszOptions = NULL;
+    
+    psWarpOptions->eResampleAlg = (GDALResampleAlg)resampleType;
     
     papszOptions = CSLSetNameValue(papszOptions,"INIT_DEST","NODATA");
     psWarpOptions->papszWarpOptions = papszOptions;

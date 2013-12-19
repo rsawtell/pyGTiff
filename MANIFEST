@@ -3,4 +3,5 @@ setup_noc.py
 INSTALL.txt
 pyTiff/geotiff.py
 pyTiff/warpCopy.cpp
+pyTiff/shape.cpp
 pyTiff/__init__.py

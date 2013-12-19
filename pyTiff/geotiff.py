@@ -130,6 +130,7 @@ data - numpy array of data that will be stored in the new file.
        Height and Width should also be the same as this geotiff or the transform copy is meaningless
 nodata - list of per-band nodata values that will override the images current values
 options - gdal create options
+create - set to True if the output directory should be created if it does not exist, default is False
        
 If this is a virtual geotiff and no input data is specified, this geotiff will instead be written to
 disk and this object will be converted to a real geotiff'''
@@ -305,6 +306,9 @@ band - if the image contains multiple bands this specifies that only a single ba
         else:
             return na 
             
+    def __getitem__(self,slc):
+        return self.getData(tp=None)[slc]
+            
     def getPath(self):
         '''Return the system path to the image'''
         return self.inputTIF
@@ -328,7 +332,7 @@ band - if the image contains multiple bands this specifies that only a single ba
         na = np.ones((self.height,self.width),dtype=np.uint8)*255
         return self.geovirt(na)
         
-    def intersect(self,secondTIF,outputTIF=None,nodata = None):
+    def intersect(self,secondTIF,outputTIF=None,nodata = None,resampleType=0):
         '''Intersect two geotiff datasets, the result will be a geotiff object with the same
 geoTransform and projection as this dataset, but will contain warped values from the second dataset
 
@@ -347,7 +351,7 @@ already true of the secondTIF parameter, this method will simply return secondTI
                 raise TypeError("secondTIF must be a valid geotiff object")
             
             #check to make sure we really need to warp
-            if(self.geoTransform == secondTIF.geoTransform and self.projection == secondTIF.projection and self.gcpProjection == secondTIF.gcpProjection and self.GCPs == secondTIF.GCPs):
+            if(self.geoTransform == secondTIF.geoTransform and self.projection == secondTIF.projection and self.gcpProjection == secondTIF.gcpProjection and self.GCPs == secondTIF.GCPs and self.height == secondTIF.height and self.width == secondTIF.width):
                 return secondTIF
             
             #if the second tiff has no projection information but matches the dimensions of the first, assume they are overlapping
@@ -399,7 +403,7 @@ already true of the secondTIF parameter, this method will simply return secondTI
             tmp.geocopy(outputTIF)
             
             #perform the warp
-            warpCopy(secondTIF.getPath(),tmp.getPath(),nodata)
+            warpCopy(secondTIF.getPath(),tmp.getPath(),nodata,resampleType)
             
             if d==None:   
                 return tmp
@@ -415,9 +419,41 @@ already true of the secondTIF parameter, this method will simply return secondTI
         except ImportError:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
         
-    def __getitem__(self,slc):
-        return self.getData(tp=None)[slc]
+    def shapeIntersect(self,wkb):
+        '''Generate an array containing the proportion of a pixel that overlaps with a polygon
+Multiplying the return value by the area per pixel will give you the area of overlap.
+Performing a boolean operation, eg. (retVal>.5), will give you an array that can be used to index the
+geotiff data.
         
+wkb - well known binary, should be in string format, for example the shapely .wkb attribute
+      the shape should be in the same projection as the geotiff, so be sure to reproject if necessary beforehand
+'''
+
+        try:
+            from shape import shapeSlice
+            
+            if(self.geoTransform == None):
+                gt = (0,1,0,0,0,1)
+            else:
+                gt = self.geoTransform
+                
+            return shapeSlice(np.array(gt,dtype=np.float32),np.fromstring(wkb,dtype=np.uint8),self.width,self.height)
+            
+        except ImportError:
+            raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
+        
+    def getPixelArea(self):
+        '''Returns the area of the pixel in projected units (or 1 if unprojected)'''
+        
+        if self.geoTransform!=None:
+            gt = self.geoTransform
+            
+            b1 = ((gt[1]+gt[2])**2 + (gt[4]+gt[5])**2)**.5
+            b2 = ((gt[1]-gt[2])**2 + (gt[4]-gt[5])**2)**.5
+            
+            return .5*b1*b2
+        else:
+            return 1
         
     def getCoord(self,point=None):
         '''Returns the lat/lon coords of a pixel in the image, or a tuple of numpy arrays with lat/lon for every point in the image'''

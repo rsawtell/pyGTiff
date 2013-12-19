@@ -7,16 +7,17 @@ gdal_inc='/usr/include/gdal'
 gdal_vers='1.7.0'
 
 warpCopyExt = Extension('pyTiff.warpCopy', ['pyTiff/warpCopy.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
+shapeExt = Extension('pyTiff.shape', ['pyTiff/shape.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
 
 setup (name = 'pyTiff',
-       version = '.16',
+       version = '.2',
        author = 'Reid Sawtell',
        author_email = "rwsawtel@mtu.edu",
        url = 'http://wiki.mtri.org/display/mtri/pyDepth#pyDepth',
        description = 'Convenience class for handling geotiffs through GDAL',
        packages = ['pyTiff'],
        package_dir = {'pyTiff': 'pyTiff'},
-       ext_modules = [warpCopyExt],
+       ext_modules = [warpCopyExt, shapeExt],
        classifiers = [
                         "Programming Language :: Python",
                         "Programming Language :: Python :: 2.7",
