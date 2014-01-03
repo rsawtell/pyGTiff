@@ -249,7 +249,18 @@ disk and this object will be converted to a real geotiff'''
         if(nodata!=None):
             g.nodata = nodata
         else:
-            g.nodata = [None for x in xrange(g.bands)]
+            g.nodata = self.nodata
+        
+        
+        #'fix' nodata values in the data array to match the specified nodata
+        if isinstance(data,np.ma.masked_array):
+            if data.ndim==3:
+                for b in xrange(data.shape[0]):
+                    if g.nodata[b]!=None:
+                        g.data[b][data[b].mask!=0]==g.nodata[b]
+            elif data.ndim==2:
+                if g.nodata[0]!=None:
+                    g.data[data.mask!=0]==g.nodata[0]
         
         return g
     
@@ -284,9 +295,9 @@ band - if the image contains multiple bands this specifies that only a single ba
                 na = self.data[yoff:yoff+ysize,xoff:xoff+xsize]
             
             if tp==None:
-                return na
+                return self.__ndma__(na,band=band)
             else:
-                return np.array(na,dtype=tp)
+                return self.__ndma__(np.array(na,dtype=tp),band=band)
             
 
         #otherwise read the file to get the data
@@ -300,11 +311,35 @@ band - if the image contains multiple bands this specifies that only a single ba
         ds = None
         
         if na.ndim==3 and na.shape[0]==1:
-            return na[0,:,:]
+            return self.__ndma__(na[0,:,:],band=band)
         elif na.ndim==3 and not band==None:
-            return na[band,:,:]
+            return self.__ndma__(na[band,:,:],band=band)
         else:
-            return na 
+            return self.__ndma__(na,band=band)
+            
+    def __ndma__(self,data,band=None):
+        '''Converts to numpy masked array if nodata values are present'''
+        if self.nodata==None:
+            return data
+
+        nd = np.array([[x] for x in self.nodata])
+        
+        if band==None:
+            band=np.array(np.linspace(0,nd.shape[0]-1,nd.shape[0]),dtype=np.int32)
+            
+        if band.shape[0]>1:
+            
+            nd = nd[band]
+            
+            mask = np.zeros(data.shape,dtype=np.bool)
+            
+            for b in xrange(band.shape[0]):
+                mask[b] = data[b]==nd[b]
+            
+            return np.ma.masked_array(data,mask=mask)
+        else:
+            return np.ma.masked_array(data,mask=data==nd[band])
+        
             
     def __getitem__(self,slc):
         return self.getData(tp=None)[slc]
