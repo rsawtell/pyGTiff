@@ -22,6 +22,8 @@ def nptype2gdal(nptype):
         return gdal.GDT_Int16
     elif(nptype == np.int32):
         return gdal.GDT_Int32
+    elif(nptype == np.int64):
+        return gdal.GDT_Int32
     elif(nptype == np.float32):
         return gdal.GDT_Float32
     elif(nptype == np.float64):
