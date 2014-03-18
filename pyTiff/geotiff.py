@@ -320,13 +320,17 @@ band - if the image contains multiple bands this specifies that only a single ba
     def __ndma__(self,data,band=None):
         '''Converts to numpy masked array if nodata values are present'''
         if self.nodata==None:
-            return data
+            return np.ma.masked_array(data)
 
         nd = np.array([[x] for x in self.nodata])
         
-        if band==None:
+        if band==None or self.band==band:
             band=np.array(np.linspace(0,nd.shape[0]-1,nd.shape[0]),dtype=np.int32)
-            
+        else:
+            if isinstance(band,int):
+                band = [band]
+            band = np.array(band)
+
         if band.shape[0]>1:
             
             nd = nd[band]
