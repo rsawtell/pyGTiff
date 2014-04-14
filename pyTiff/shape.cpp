@@ -119,6 +119,7 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     OGRPolygon shape = OGRPolygon();
     
     if(shape.importFromWkb(sdata)) return NULL;
+    if(!shape.IsValid()) return NULL;
     
     //create the output data array
     int dimensions[2] = {height,width};
