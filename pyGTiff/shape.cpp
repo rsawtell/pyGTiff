@@ -1,7 +1,25 @@
+//Copyright 2012 Reid Sawtell
+
+//This file is part of pyGTiff.
+
+//pyGTiff is free software: you can redistribute it and/or modify
+//it under the terms of the GNU General Public License as published by
+//the Free Software Foundation, either version 3 of the License, or
+//(at your option) any later version.
+
+//pyGTiff is distributed in the hope that it will be useful,
+//but WITHOUT ANY WARRANTY; without even the implied warranty of
+//MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//GNU General Public License for more details.
+
+//You should have received a copy of the GNU General Public License
+//along with pyGTiff.  If not, see <http://www.gnu.org/licenses/>.
+
 #include <Python.h>
 #include <numpy/arrayobject.h>
 #include "ogr_api.h"
 #include "ogr_geometry.h"
+#include "string"
 
 typedef unsigned char byte;
 
@@ -111,22 +129,32 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     //check for errors
     if (transform==NULL || shapebinary == NULL)
     {
+        PyErr_SetString(PyExc_ValueError,"Invalid input arguments.");
         return NULL;
     }
     
     //convert wkb to polygon
-    byte* sdata = (byte*)shapebinary->data;
+    byte* sdata = (byte*)PyArray_DATA(shapebinary);
     OGRPolygon shape = OGRPolygon();
     
-    if(shape.importFromWkb(sdata)) return NULL;
-    if(!shape.IsValid()) return NULL;
+    if(shape.importFromWkb(sdata))
+    {
+        PyErr_SetString(PyExc_ValueError,"Error parsing WKB data.");
+        return NULL;
+    }
+    
+    if(!shape.IsValid())
+    {
+        PyErr_SetString(PyExc_ValueError,"Polygon is invalid, please fix all geometry errors before intersecting.");
+        return NULL;
+    }
     
     //create the output data array
     int dimensions[2] = {height,width};
     PyArrayObject* outdata = (PyArrayObject*)PyArray_FromDims(2,dimensions,PyArray_FLOAT);
     
-    float* odata = (float*) outdata->data;
-    float* tdata = (float*) transform->data;
+    float* odata = (float*) PyArray_DATA(outdata);
+    float* tdata = (float*) PyArray_DATA(transform);
     
     //initialize lat/lon coords for all pixel corners
     lat = new double*[height+1];
@@ -211,11 +239,12 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
     //check for errors
     if (shapebinary == NULL || srcWKT==NULL || dstWKT==NULL)
     {
+        PyErr_SetString(PyExc_ValueError,"Invalid input arguments");
         return NULL;
     }
     
     //convert wkb to polygon
-    byte* sdata = (byte*)shapebinary->data;
+    byte* sdata = (byte*)PyArray_DATA(shapebinary);
     OGRPolygon shape = OGRPolygon();
     
     if(shape.importFromWkb(sdata)) return NULL;
@@ -225,30 +254,51 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
     switch(mode)
     {
         case 0://WKT
-            if(srs.importFromWkt((char**)&srcWKT)) return NULL;
+            if(srs.importFromWkt((char**)&srcWKT))
+            {   
+                PyErr_SetString(PyExc_ValueError,(std::string("Invalid WKT: ") + srcWKT).c_str());
+                return NULL;
+            }
             break;
         case 1://EPSG
-            if(srs.importFromEPSG(atoi(srcWKT))) return NULL;
+            if(srs.importFromEPSG(atoi(srcWKT)))
+            {
+                PyErr_SetString(PyExc_ValueError,(std::string("Invalid EPSG number: ") + srcWKT).c_str());
+                return NULL;
+            }
             break;
         case 2://PROJ4
-            if(srs.importFromProj4(srcWKT)) return NULL;
+            if(srs.importFromProj4(srcWKT))
+            {
+                PyErr_SetString(PyExc_ValueError,(std::string("Invalid Proj4 String: ") + srcWKT).c_str());
+                return NULL;
+            }
             break;
         default:
+            PyErr_SetString(PyExc_ValueError,"Mode must be one of: 0 - WKT, 1 - EPSG, 2 - Proj4");
             return NULL;
     }
     
     OGRSpatialReference dst = OGRSpatialReference();
-    if(dst.importFromWkt((char**)&dstWKT)) return NULL;
+    if(dst.importFromWkt((char**)&dstWKT))
+    {
+        PyErr_SetString(PyExc_ValueError,"Error determining destination spatial reference.");
+        return NULL;
+    }
     
     OGRCoordinateTransformation* trans = OGRCreateCoordinateTransformation(&srs,&dst);
-    if(trans==NULL) return NULL;
+    if(trans==NULL)
+    {
+        PyErr_SetString(PyExc_ValueError,"Could not compute coordinate transformation.");
+        return NULL;
+    }
     
     if(shape.transform(trans)) return NULL;
     
     int dimensions[1] = {shape.WkbSize()};
     PyArrayObject* outdata = (PyArrayObject*)PyArray_FromDims(1,dimensions,PyArray_BYTE);
     
-    shape.exportToWkb(wkbNDR,(byte*)outdata->data);
+    shape.exportToWkb(wkbNDR,(byte*)PyArray_DATA(outdata));
     
     //return data
     return Py_BuildValue("N",(PyObject*)outdata);

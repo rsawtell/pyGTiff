@@ -26,6 +26,7 @@ static PyObject * warpCopy(PyObject *self, PyObject *args)
     
     if (inputName==NULL || outputName==NULL)
     {
+        PyErr_SetString(PyExc_ValueError,"Invalid input arguments.");
         return NULL;
     }
     

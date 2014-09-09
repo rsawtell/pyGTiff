@@ -1,7 +1,7 @@
 setup.py
-setup_noc.py
-INSTALL.txt
-pyTiff/geotiff.py
-pyTiff/warpCopy.cpp
-pyTiff/shape.cpp
-pyTiff/__init__.py
+README.txt
+lgpl.txt
+pyGTiff/geotiff.py
+pyGTiff/warpCopy.cpp
+pyGTiff/shape.cpp
+pyGTiff/__init__.py

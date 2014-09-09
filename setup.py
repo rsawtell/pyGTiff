@@ -1,33 +1,70 @@
 #!/usr/bin/env python
 from distutils.core import setup, Extension
-import numpy
+from distutils.command.build import build
+import numpy, sys
 
-gdal_lib='/usr/lib '
+#update to reflect your system
+gdal_lib='/usr/lib'
 gdal_inc='/usr/include/gdal'
-gdal_vers='1.7.0'
+gdal_vers=''
 
-warpCopyExt = Extension('pyTiff.warpCopy', ['pyTiff/warpCopy.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
-shapeExt = Extension('pyTiff.shape', ['pyTiff/shape.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
+warpCopyExt = Extension('pyGTiff.warpCopy', ['pyGTiff/warpCopy.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
+shapeExt = Extension('pyGTiff.shape', ['pyGTiff/shape.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
 
-setup (name = 'pyTiff',
-       version = '.2',
-       author = 'Reid Sawtell',
-       author_email = "rwsawtel@mtu.edu",
-       url = 'http://wiki.mtri.org/display/mtri/pyDepth#pyDepth',
-       description = 'Convenience class for handling geotiffs through GDAL',
-       packages = ['pyTiff'],
-       package_dir = {'pyTiff': 'pyTiff'},
-       ext_modules = [warpCopyExt, shapeExt],
-       classifiers = [
-                        "Programming Language :: Python",
-                        "Programming Language :: Python :: 2.7",
-                        "Operating System :: OS Independent",
-                        "Development Status :: 2 - Pre-Alpha",
-                        "Environment :: Console",
-                        "Intended Audience :: Science/Research",
-                        "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
-                        "Natural Language :: English",
-                        "Topic :: Scientific/Engineering :: GIS",
-                     ]
-      )
+#compile without C++ extensions
+if( "-noc" in sys.argv or "--noc" in sys.argv):
+    
+    if '-noc' in sys.argv:
+        index = sys.argv.index("-noc")
+        
+    if '--noc' in sys.argv:
+        index = sys.argv.index("--noc")  
+        
+    sys.argv.pop(index)
+    
+    
+    setup (name = 'pyGTiff',
+        version = '1.0',
+        author = 'Reid Sawtell',
+        author_email = "rwsawtel@mtu.edu",
+        url = 'https://bitbucket.org/rsawtell/pygtiff',
+        description = 'Convenience class for handling geotiffs (and potentially other formats) through GDAL',
+        packages = ['pyGTiff'],
+        package_dir = {'pyGTiff': 'pyGTiff'},
+        classifiers = [
+                            "Programming Language :: Python",
+                            "Programming Language :: Python :: 2.7",
+                            "Operating System :: OS Independent",
+                            "Development Status :: 5 - Production/Stable",
+                            "Environment :: Console",
+                            "Intended Audience :: Science/Research",
+                            "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+                            "Natural Language :: English",
+                            "Topic :: Scientific/Engineering :: GIS",
+                        ]
+        )
+        
+#compile with C++ extensions        
+else:
+    setup (name = 'pyGTiff',
+        version = '1.0',
+        author = 'Reid Sawtell',
+        author_email = "rwsawtel@mtu.edu",
+        url = 'https://bitbucket.org/rsawtell/pygtiff',
+        description = 'Convenience class for handling geotiffs (and potentially other formats) through GDAL',
+        packages = ['pyGTiff'],
+        package_dir = {'pyGTiff': 'pyGTiff'},
+        ext_modules = [warpCopyExt, shapeExt],
+        classifiers = [
+                            "Programming Language :: Python",
+                            "Programming Language :: Python :: 2.7",
+                            "Operating System :: OS Independent",
+                            "Development Status :: 5 - Production/Stable",
+                            "Environment :: Console",
+                            "Intended Audience :: Science/Research",
+                            "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+                            "Natural Language :: English",
+                            "Topic :: Scientific/Engineering :: GIS",
+                        ]
+        )
        

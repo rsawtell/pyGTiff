@@ -1,5 +1,22 @@
 #!/usr/bin/env python
 
+#Copyright 2012 Reid Sawtell
+
+#This file is part of pyGTiff.
+
+#pyGTiff is free software: you can redistribute it and/or modify
+#it under the terms of the GNU General Public License as published by
+#the Free Software Foundation, either version 3 of the License, or
+#(at your option) any later version.
+
+#pyGTiff is distributed in the hope that it will be useful,
+#but WITHOUT ANY WARRANTY; without even the implied warranty of
+#MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#GNU General Public License for more details.
+
+#You should have received a copy of the GNU General Public License
+#along with pyGTiff. If not, see <http://www.gnu.org/licenses/>.
+
 try:
     from osgeo import gdal
 except ImportError:
@@ -28,6 +45,10 @@ def nptype2gdal(nptype):
         return gdal.GDT_Float32
     elif(nptype == np.float64):
         return gdal.GDT_Float64
+    elif(nptype == np.complex64):
+        return gdal.GDT_CFloat32
+    elif(nptype == np.complex128):
+        return gdal.GDT_CFloat64
         
 def gdaltype2np(gtype):
     '''Convert GDAL data type into numpy data type'''
@@ -45,15 +66,31 @@ def gdaltype2np(gtype):
         return np.float32
     elif(gtype == gdal.GDT_Float64):
         return np.float64
+    elif(gtype == gdal.GDT_CFloat32):
+        return np.complex64
+    elif(gtype == gdal.GDT_CFloat64):
+        return np.complex128
 
 class geotiff:
     '''Convenience wrapper for handling GeoTIFF files using GDAL.'''
     
     def __init__(self,inputTIF,band=None):
         '''Create a geotiff instance using either a file or data.
-Instances created using data (virtual geotiff) do not assume any projection information,
-this must be set through the instances geoTransform and projection properties,
-these properties are the same as used by gdal.'''
+        
+        Instances created using data (virtual geotiff) do not assume any projection information,
+        this must be set through the instances geoTransform and projection properties,
+        these properties are the same as used by gdal.
+        
+        Args:
+            inputTIF: either a string containing the path to a geotiff file
+                      or a numpy array of either 2 or 3 dimensions.
+            band: optionally specify a valid band number and the tiff will be
+                  treated as a single band image (2d numpy array)
+                  
+        Raises:
+            TypeError: inputTIF is of an invalid type
+            ValueError: if inputTIF is a string and does not point to a valid file.
+                        if inputTIF is an array and is not either 2 or 3 dimensions.'''
         
         if not (isinstance(inputTIF,str) or isinstance(inputTIF,np.ndarray)):
             raise TypeError("inputTIF should be a string or numpy array")
@@ -84,12 +121,18 @@ these properties are the same as used by gdal.'''
                 self.bands = 1
                 self.band = band
                 self.nodata = [ds.GetRasterBand(self.band+1).GetNoDataValue()]
+                self.shape = (self.height,self.width)
 
             else:#otherwise use all bands
                 
                 self.bands = ds.RasterCount
                 self.band = None
                 self.nodata = []
+                
+                if(self.bands==1):
+                    self.shape = (self.height,self.width)
+                else:
+                    self.shape = (self.bands,self.height,self.width)
                 
                 for x in xrange(self.bands):
                     self.nodata += [ds.GetRasterBand(x+1).GetNoDataValue()]
@@ -105,10 +148,12 @@ these properties are the same as used by gdal.'''
                 self.width = inputTIF.shape[2]
                 self.height = inputTIF.shape[1]
                 self.bands = inputTIF.shape[0]
+                self.shape = (self.bands,self.height,self.width)
             else:
                 self.width = inputTIF.shape[1]
                 self.height = inputTIF.shape[0]
                 self.bands=1
+                self.shape = (self.height,self.width)
                 
             self.band = None
             self.geoTransform = None
@@ -120,22 +165,39 @@ these properties are the same as used by gdal.'''
             self.nodata = [None for x in xrange(self.bands)]
             
       
-    def geocopy(self, outputTIF, data=None, nodata=None, options=[], create=False):
+    def geocopy(self, outputTIF, data=None, nodata=None, options=[], create=False, compress=False):
         '''Create a new GeoTIFF file that posseses the same transform and projection as this geotiff, but with new data
         
-outputTIF - name of the new GeoTIFF to be created
-data - numpy array of data that will be stored in the new file.
-       The array should be shaped (x,h,w) where 
-       x is the number of bands
-       h is the height of the image
-       w is the width of the image
-       Height and Width should also be the same as this geotiff or the transform copy is meaningless
-nodata - list of per-band nodata values that will override the images current values
-options - gdal create options
-create - set to True if the output directory should be created if it does not exist, default is False
-       
-If this is a virtual geotiff and no input data is specified, this geotiff will instead be written to
-disk and this object will be converted to a real geotiff'''
+        If this is a virtual geotiff and no input data is specified, this geotiff will instead be written to
+        disk and this object will be converted to a real geotiff.
+        
+        Prints a warning if the number of raster bands exceeds 20, this does not stop you from creating a raster
+        but is intended to help debugging. Most raster images have 4 or fewer bands with the exception of
+        hyperspectral imagery, so if you are outputting an image in excess of 20 bands it is likely the
+        input array does not have the raster bands as the first axis (ex: 640x480x3 (incorrect) instead of 3x640x480 (correct)).
+            
+        Args:
+            outputTIF: name of the new GeoTIFF to be created.
+            data: numpy array of data that will be stored in the new file.
+                The array should be shaped (x,h,w) where 
+                x is the number of bands
+                h is the height of the image
+                w is the width of the image
+                Height and Width should also be the same as this geotiff or the transform copy is meaningless.
+            nodata: list of per-band nodata values that will override the images current values.
+            options: list gdal create options, see http://www.gdal.org/frmt_gtiff.html.
+            create: set to True if the output directory should be created if it does not exist, default is False.
+            compress: if True, output geotiff will use deflate compression, default is False.
+            
+        Returns:
+            geotiff instance pointing to the newly copied file.
+            
+        Raises: 
+            TypeError: Input arguments are of the incorrect type.
+            ValueError: Image sizes do not match.
+                        Data is not either 2 or 3 dimensions.
+            IOError: Error occurred writing file to disk.
+        '''
         
         #check if the user supplied data, if they didn't this instance must be virtual
         if data==None and self.data == None:
@@ -153,6 +215,9 @@ disk and this object will be converted to a real geotiff'''
         
         if not isinstance(data,np.ndarray):
             raise TypeError("data should be a numpy array")
+        
+        if compress:
+            options += ['COMPRESS=DEFLATE']
 
         #check that dimensions match
         if data.ndim==3:
@@ -227,7 +292,26 @@ disk and this object will be converted to a real geotiff'''
             return geotiff(outputTIF)
             
     def geovirt(self,data,nodata=None):
-        '''Returns a virtual geotiff using data and projection information from this instance'''
+        '''Creates a virtual geotiff using data and projection information from a geotiff object
+        
+        Args:
+            data: numpy array of data that will be stored in the new file.
+                The array should be shaped (x,h,w) where 
+                x is the number of bands
+                h is the height of the image
+                w is the width of the image
+                Height and Width should also be the same as this geotiff or the transform copy is meaningless.
+            nodata: list of per-band nodata values that will override the images current values
+            
+        Returns:
+            A virtual geotiff object, the distinction being the data is stored purely in memory
+            and is not yet written to disk.
+            
+        Raises: 
+            TypeError: Input arguments are of the incorrect type.
+            ValueError: Image sizes do not match.
+                        Data is not either 2 or 3 dimensions.
+       '''
         
         if data.ndim==3:
             if not (data.shape[1] == self.height and data.shape[2] == self.width):
@@ -266,12 +350,21 @@ disk and this object will be converted to a real geotiff'''
         
         return g
     
-    def getData(self,tp=(np.float32),band=None,xoff=0,yoff=0,xsize=None,ysize=None):
+    def getData(self,tp=np.float32,band=None,xoff=0,yoff=0,xsize=None,ysize=None):
         '''Open a GeoTIFF and return the raw data as a numpy array
+        
+        This method does not support dynamic updating, therefor every time this method is called the entirety of the file is read.
+        Best practice is to use slicing notation to retrieve the largest subset of the file needed for your program, save the return
+        array and reuse it to avoid additional read operations.
+        
+        Args:
     
-tp - numpy datatype of the output array
-band - if the image contains multiple bands this specifies that only a single band should be returned
-       a value of -1 returns an array filled with ones with the same dimensions as a single band from this raster'''
+            tp: numpy datatype of the output array, set to None to use the native datatype, defaults to singe precision float
+            band: If the image contains multiple bands this specifies that only a single band should be returned.
+                A value of -1 returns an array filled with ones with the same dimensions as a single band from this raster.
+                
+        Returns:
+            Numpy array containing data read in from file.'''
 
         #set band restriction if it is in place
         if not self.band == None:
@@ -320,7 +413,12 @@ band - if the image contains multiple bands this specifies that only a single ba
             return self.__ndma__(na,band=band)
             
     def __ndma__(self,data,band=None):
-        '''Converts to numpy masked array if nodata values are present'''
+        '''Converts to numpy masked array
+        
+        If nodata values are specified the masked array will reflect that by masking those values.
+        Note that masked arrays behave differently than normal numpy arrays for some operations,
+        because of this masked arrays are returned regardless of nodata values for consistent behavior.'''
+        
         if self.nodata==None:
             return np.ma.masked_array(data)
 
@@ -348,7 +446,124 @@ band - if the image contains multiple bands this specifies that only a single ba
         
             
     def __getitem__(self,slc):
-        return self.getData(tp=None)[slc]
+        """Support for slicing notation
+        
+        Returns a numpy array containing data from the tiff file. Modifying the contents
+        of that array will not affect the contents of the file itself."""
+
+        def processList(lst,mx):
+                slc2 = []
+                
+                for x in lst:
+                    if x<0:
+                        slc2 += [mx+x]
+                    else:
+                        slc2 += [x]
+                        
+                s2min = min(slc2)
+                s2max = max(slc2)
+                        
+                if(s2min<0):
+                    raise IndexError("index {0} is out of bounds for axis 0 with size {1}".format(s2min-mx,mx))
+                elif(s2max>=mx):
+                    raise IndexError("index {0} is out of bounds for axis 0 with size {1}".format(s2max,mx))
+                
+                rng = (s2min,s2max-s2min+1)
+                slc = [x-s2min for x in slc2]
+                
+                return (rng,slc)
+            
+        def processSlice(slc,mx):
+            
+            slc2 = list(slc.indices(mx))
+            #print '>>>',slc2
+            
+            if(slc.step>0 or slc.step==None):
+                rng = (slc2[0],slc2[1]-slc2[0])
+            else:
+                rng = (slc2[1]+1,slc2[0]-slc2[1])
+                
+            #print rng
+                
+            slcnew = slice(None,None,slc.step)
+            
+            return (rng,slcnew)
+        
+        def process(slc,mx):
+            if isinstance(slc, list):
+                return processList(slc,mx)
+            else:
+                return processSlice(slc,mx)
+
+        dim1 = slice(None,None,None)
+
+        dim2 = (0,None)
+        dim2slc = slice(None,None,None)
+
+        dim3 = (0,None)
+        dim3slc = slice(None,None,None)
+        
+        if isinstance(slc, int):
+               slc = [slc]
+
+        #only have a list
+        if isinstance(slc, list):
+            #single band image
+            if self.band!=None or self.bands==1:
+                dim2,dim2slc = processList(slc,self.height)
+            
+            #multi band image
+            else:
+                dim1 = slc
+        
+        #have a single slice
+        elif isinstance(slc,slice):
+            if self.band!=None or self.bands==1:
+                dim2,dim2slc = processSlice(slc,self.height)
+            else:
+                dim1 = slc
+                
+        elif isinstance(slc,np.ndarray):
+            return self.getData(tp=None)[slc]
+        
+        #slice over multiple dimensions
+        elif isinstance(slc,tuple):
+            if len(slc)>(3-(self.band!=None or self.bands==1)):
+                raise IndexError("too many indices")
+                 
+            for x,n in enumerate(slc):
+                if isinstance(n,int):
+                    n = [n]
+                
+                if self.band!=None or self.bands==1:
+                    if x==0:
+                        dim2,dim2slc = process(n,self.height)
+                    elif x==1:
+                        dim3,dim3slc = process(n,self.width)
+                else:
+                    if x==0:
+                        if isinstance(n, list):
+                            dim1 = n
+                        elif isinstance(n,slice):
+                            dim1 = slc
+                    elif x==1:
+                        dim2,dim2slc = process(n,self.height)
+                    elif x==2:
+                        dim3,dim3slc = process(n,self.width)
+        
+        if isinstance(dim1, slice):
+            slc2 = dim1.indices(self.bands)
+            dim1 = range(*slc2)
+        
+        data = self.getData(tp=None,band=dim1,yoff=dim2[0],ysize=dim2[1],xoff=dim3[0],xsize=dim3[1])
+        
+        if(data.ndim==2):
+            return data[dim2slc,dim3slc]
+        else:
+            return data[dim1,dim2slc,dim2slc]
+    
+    def __len__(self):
+        return self.bands
             
     def getPath(self):
         '''Return the system path to the image'''
@@ -369,20 +584,29 @@ band - if the image contains multiple bands this specifies that only a single ba
         return not self.data==None
         
     def nullMask(self):
-        '''return a virtual geotiff with all data values set to 255'''
+        '''Return a single band virtual geotiff with all data values set to 255'''
         na = np.ones((self.height,self.width),dtype=np.uint8)*255
         return self.geovirt(na)
         
     def intersect(self,secondTIF,outputTIF=None,nodata = None,resampleType=0):
-        '''Intersect two geotiff datasets, the result will be a geotiff object with the same
-geoTransform and projection as this dataset, but will contain warped values from the second dataset
-
-secondTIF - geotiff to warp
-outputTIF - optional name for a new dataset if one is created
-nodata    - if defined, should be a list object with nodata values specified for the bands in secondTIF
-
-returns a geotiff object with the same geoTransform and projection as this object. If this is
-already true of the secondTIF parameter, this method will simply return secondTIF'''
+        '''Intersect two geotiff datasets.
+        The result will be a geotiff object with the same
+        geoTransform and projection as this dataset, but will contain warped values from the second dataset.
+        
+        Args:
+            secondTIF: geotiff to warp
+            outputTIF: optional name for a new dataset if one is created
+            nodata: if defined, should be a list object with nodata values specified for the bands in secondTIF
+            
+            
+        Returns:
+            A geotiff object with the same geoTransform and projection as this object, with data from secondTIF.
+            If secondTIF does not need to be warped then it will be returned unmodified.
+            If secondTIF has no projection information but matches the image size exactly, it will be assumed to be overlapping.
+            
+        Raises:
+            TypeError: if secondTIF is not a geotiff object
+            NotImplementedError: if the C++ libraries are missing or broken'''
 
         try:
             from warpCopy import warpCopy
@@ -461,13 +685,26 @@ already true of the secondTIF parameter, this method will simply return secondTI
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
         
     def shapeIntersect(self,wkb,srcSRS=None):
-        '''Generate an array containing the proportion of a pixel that overlaps with a polygon
-Multiplying the return value by the area per pixel will give you the area of overlap.
-Performing a boolean operation, eg. (retVal>.5), will give you an array that can be used to index the
-geotiff data.
+        '''Rasterize a polygon.
         
-wkb - well known binary, should be in string format, for example the shapely .wkb attribute
-      the shape should be in the same projection as the geotiff, so be sure to reproject if necessary beforehand
+        Generate an array containing the proportion of a pixel that overlaps with a polygon.
+        Multiplying the return value by the area per pixel will give you the area of overlap.
+        Performing a boolean operation, eg. (retVal>.5), will give you an array that can be used to index the
+        geotiff data, such as for zonal statistics.
+        
+        Args:
+            wkb: well known binary, should be in string format (For example: the shapely .wkb attribute)
+                 the shape should be valid and in the same projection as the geotiff.
+            srcSRS: optionally specify the EPSG number or proj4 string for the shapes projection to have it converted
+                    to match the geotiff's projection (EX: 4326, "EPSG:4326", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs").
+                    
+        Returns:
+            Numpy array with the same height,width as the tif image.
+            Each value in the numpy array will contain a floating point number indicating the proportion of the
+            pixel that overlaps the input shape. (Multiply by 100 to get the % overlap, so 1 is 100% overlap)
+            
+        Raises:
+            NotImplementedError: if the C++ libraries are missing or broken
 '''
 
         try:
@@ -516,7 +753,14 @@ wkb - well known binary, should be in string format, for example the shapely .wk
             return 1
         
     def getCoord(self,point=None):
-        '''Returns the lat/lon coords of a pixel in the image, or a tuple of numpy arrays with lat/lon for every point in the image'''
+        '''Get coordinates from pixel points
+        
+        Args: tuple containing (x,y) pixel coordinate, default is None
+        
+        Returns:
+            If point is None this returns a tuple containing (latitute, longitude) for every point in the image.
+            If point is specified, a tuple containing (latitude, longitude) for the specified point.
+            Returns None if this geotiff has no projection information.'''
         
         #geotiff must have projection information for this to work
         if(self.projection!=None and self.geoTransform!=None):
@@ -535,7 +779,14 @@ wkb - well known binary, should be in string format, for example the shapely .wk
                 return (lon,lat)
             
     def getXY(self, lon,lat):
-        '''Returns the x,y pixel coordinates of a Geolocated point in the image'''
+        '''Returns the x,y pixel coordinates of a Geolocated point in the image
+        
+        Args:
+            lon - longitude of the x,y point in projected units
+            lat - latitude of the x,y point in projected units
+            
+        Returns:
+            A tuple containing the (x,y) pixel coordinate'''
         
         #geotiff must have projection information for this to work
         if(self.projection!=None and self.geoTransform!=None):
