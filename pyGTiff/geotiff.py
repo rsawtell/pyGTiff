@@ -121,7 +121,6 @@ class geotiff:
                 self.bands = 1
                 self.band = band
                 self.nodata = [ds.GetRasterBand(self.band+1).GetNoDataValue()]
-                self.shape = (self.height,self.width)
 
             else:#otherwise use all bands
                 
@@ -129,14 +128,10 @@ class geotiff:
                 self.band = None
                 self.nodata = []
                 
-                if(self.bands==1):
-                    self.shape = (self.height,self.width)
-                else:
-                    self.shape = (self.bands,self.height,self.width)
-                
                 for x in xrange(self.bands):
                     self.nodata += [ds.GetRasterBand(x+1).GetNoDataValue()]
-                
+           
+            self.shape = (self.bands,self.height,self.width)
             ds = None
 
         #virtual geotiff, does not assume any projection information -- must be set independently if known
@@ -149,18 +144,20 @@ class geotiff:
                 self.height = inputTIF.shape[1]
                 self.bands = inputTIF.shape[0]
                 self.shape = (self.bands,self.height,self.width)
+                self.data = inputTIF
             else:
                 self.width = inputTIF.shape[1]
                 self.height = inputTIF.shape[0]
                 self.bands=1
-                self.shape = (self.height,self.width)
+                self.shape = (1, self.height,self.width)
+                self.data = np.array([inputTIF])
                 
             self.band = None
             self.geoTransform = None
             self.projection = ""
             self.gcpProjection = ""
             self.GCPs = ()
-            self.data = inputTIF
+            
             self.inputTIF = None
             self.nodata = [None for x in xrange(self.bands)]
             
@@ -346,7 +343,7 @@ class geotiff:
                         g.data[b][data[b].mask!=0]==g.nodata[b]
             elif data.ndim==2:
                 if g.nodata[0]!=None:
-                    g.data[data.mask!=0]==g.nodata[0]
+                    g.data[0,data.mask!=0]==g.nodata[0]
         
         return g
     
@@ -379,6 +376,12 @@ class geotiff:
             
         if ysize==None:
             ysize=self.height
+            
+        if band==None:
+            band = range(0,self.bands)
+            
+        if isinstance(band,list) and len(band)==1:
+            band = band[0]
 
         #if this is a virual geotiff return data
         if not self.data == None:
@@ -397,18 +400,19 @@ class geotiff:
 
         #otherwise read the file to get the data
         ds = gdal.Open(self.inputTIF, gdal.GA_ReadOnly)
-        
-        if(tp==None):
-            na = ds.ReadAsArray(xoff,yoff,xsize,ysize)
+    
+        if isinstance(band,int):
+            na = ds.GetRasterBand(band+1).ReadAsArray(xoff,yoff,xsize,ysize)
         else:
-            na = np.array(ds.ReadAsArray(xoff,yoff,xsize,ysize),dtype=tp)
+            if(tp==None):
+                na = np.array([ds.GetRasterBand(x+1).ReadAsArray(xoff,yoff,xsize,ysize) for x in band])
+            else:
+                na = np.array([ds.GetRasterBand(x+1).ReadAsArray(xoff,yoff,xsize,ysize) for x in band], dtype=tp)
             
         ds = None
         
         if na.ndim==3 and na.shape[0]==1:
-            return self.__ndma__(na[0,:,:],band=band)
-        elif na.ndim==3 and not band==None:
-            return self.__ndma__(na[band,:,:],band=band)
+            return self.__ndma__(na[0],band=band)
         else:
             return self.__ndma__(na,band=band)
             
@@ -492,8 +496,10 @@ class geotiff:
         def process(slc,mx):
             if isinstance(slc, list):
                 return processList(slc,mx)
-            else:
+            elif isinstance(slc,slice):
                 return processSlice(slc,mx)
+            elif isinstance(slc,np.ndarray):
+                return (slice(None,None,None),slc)
 
         dim1 = slice(None,None,None)
 
@@ -503,31 +509,19 @@ class geotiff:
         dim3 = (0,None)
         dim3slc = slice(None,None,None)
         
+        #only have an integer value
         if isinstance(slc, int):
-               slc = [slc]
+            slc = ([slc],)
 
         #only have a list
-        if isinstance(slc, list):
-            #single band image
-            if self.band!=None or self.bands==1:
-                dim2,dim2slc = processList(slc,self.height)
+        elif isinstance(slc, list) or isinstance(slc,slice):
+            slc = (slc,)
             
-            #multi band image
-            else:
-                dim1 = slc
-        
-        #have a single slice
-        elif isinstance(slc,slice):
-            if self.band!=None or self.bands==1:
-                dim2,dim2slc = processSlice(slc,self.height)
-            else:
-                dim1 = slc
-                
         elif isinstance(slc,np.ndarray):
             return self.getData(tp=None)[slc]
         
         #slice over multiple dimensions
-        elif isinstance(slc,tuple):
+        if isinstance(slc,tuple):
             if len(slc)>(3-(self.band!=None or self.bands==1)):
                 raise IndexError("too many indices")
                  
@@ -535,21 +529,14 @@ class geotiff:
                 if isinstance(n,int):
                     n = [n]
                 
-                if self.band!=None or self.bands==1:
-                    if x==0:
-                        dim2,dim2slc = process(n,self.height)
-                    elif x==1:
-                        dim3,dim3slc = process(n,self.width)
-                else:
-                    if x==0:
-                        if isinstance(n, list):
-                            dim1 = n
-                        elif isinstance(n,slice):
-                            dim1 = slc
-                    elif x==1:
-                        dim2,dim2slc = process(n,self.height)
-                    elif x==2:
-                        dim3,dim3slc = process(n,self.width)
+                if x==0:
+                    dim1 = n
+                elif x==1:
+                    dim2,dim2slc = process(n,self.height)
+                elif x==2:
+                    dim3,dim3slc = process(n,self.width)
+        
+        
         
         if isinstance(dim1, slice):
             slc2 = dim1.indices(self.bands)
@@ -731,7 +718,6 @@ class geotiff:
                 elif(srcSRS.startswith('+')):
                     mode=2
                     
-                print mode
                 bytes = shapeTransform(bytes,srcSRS,self.projection,mode)
                 
             return shapeSlice(np.array(gt,dtype=np.float32),bytes,self.width,self.height)
