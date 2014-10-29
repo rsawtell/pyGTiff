@@ -328,11 +328,14 @@ class geotiff:
         g.gcpProjection = self.gcpProjection
         g.GCPs = self.GCPs
         
-        #copy nodata values if supplied
+        #copy nodata values if supplied and number of bands matches
         if(nodata!=None):
             g.nodata = nodata
         else:
-            g.nodata = self.nodata
+            if len(g.nodata)<g.bands:
+                g.nodata = [None]*g.bands
+            else:
+                g.nodata = self.nodata
         
         
         #'fix' nodata values in the data array to match the specified nodata
