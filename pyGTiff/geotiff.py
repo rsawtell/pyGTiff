@@ -557,7 +557,7 @@ class geotiff:
         if(data.ndim==2):
             return data[dim2slc,dim3slc]
         else:
-            return data[dim1,dim2slc,dim2slc]
+            return data[:,dim2slc,dim2slc]
     
     def __len__(self):
         return self.bands
