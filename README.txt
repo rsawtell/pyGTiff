@@ -28,4 +28,3 @@ WINDOWS:
 
 Install osgeo4w: http://trac.osgeo.org/osgeo4w/
 python setup.py install --noc
-

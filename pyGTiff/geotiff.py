@@ -253,8 +253,15 @@ class geotiff:
             dst_ds.SetProjection(self.projection)
         
         #write GCP information if known
-        if(not (self.GCPs == () or self.gcpProjection=="")):
-            dst_ds.SetGCPs(self.GCPs,self.projection)
+        if self.GCPs != () and self.GCPs != None:
+            
+            if self.gcpProjection != None and self.gcpProjection != "": #use gcpProjection if specified
+                dst_ds.SetGCPs(self.GCPs,self.gcpProjection)
+            elif self.projection!=None and self.projection!="":#otherwise use projection if it is specified
+                dst_ds.SetGCPs(self.GCPs,self.projection)
+            else:
+                dst_ds.SetGCPs(self.GCPs,"")#no projection available (leave it up to user to figure it out)
+                
 
         #copy data into the new image and set nodata values as appropriate
         if(data.ndim==3):
@@ -528,6 +535,9 @@ class geotiff:
             for x,n in enumerate(slc):
                 if isinstance(n,int):
                     n = [n]
+                    
+                if (self.band!=None or self.bands==1):
+                    x = x+1
                 
                 if x==0:
                     dim1 = n
