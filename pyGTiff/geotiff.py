@@ -597,7 +597,13 @@ class geotiff:
             secondTIF: geotiff to warp
             outputTIF: optional name for a new dataset if one is created
             nodata: if defined, should be a list object with nodata values specified for the bands in secondTIF
-            
+            resampleType: which resampling method should be used: one of 
+                          {
+                              GRA_NearestNeighbour = 0, GRA_Bilinear = 1, GRA_Cubic = 2, GRA_CubicSpline = 3,
+                              GRA_Lanczos = 4, GRA_Average = 5, GRA_Mode = 6
+                          }
+                          defaults to 0.
+                
             
         Returns:
             A geotiff object with the same geoTransform and projection as this object, with data from secondTIF.
@@ -611,6 +617,7 @@ class geotiff:
         try:
             from warpCopy import warpCopy
             d=None
+            dt=None
             
             if not isinstance(secondTIF,geotiff):
                 raise TypeError("secondTIF must be a valid geotiff object")
@@ -629,8 +636,8 @@ class geotiff:
                     nodata = [None for x in xrange(bands)]
                     
                 tp = secondTIF.data.dtype
-                d = tempfile.mkdtemp(prefix="pytiff")
-                secondTIF = secondTIF.geocopy(os.path.join(d,"temptif.tif"),secondTIF.getData(tp=None))
+                dt = tempfile.mkdtemp(prefix="pytiff")
+                secondTIF = secondTIF.geocopy(os.path.join(dt,"temptif.tif"),secondTIF.getData(tp=None))
                 
             else:
                 #get default nodata values
@@ -660,8 +667,7 @@ class geotiff:
             
             #create temporary file if output file is not desired
             if(outputTIF==None):
-                if d==None:
-                    d = tempfile.mkdtemp(prefix="pytiff")
+                d = tempfile.mkdtemp(prefix="pytiff")
                     
                 outputTIF = os.path.join(d,'rpj.tif')
             
@@ -670,12 +676,101 @@ class geotiff:
             #perform the warp
             warpCopy(secondTIF.getPath(),tmp.getPath(),nodata,resampleType)
             
+            #remove temp directory if secondTIF was virtual
+            if dt!=None:
+                subprocess.call(['rm','-r','-f',dt])
+            
             if d==None:   
                 return tmp
             else:
                 #create virtual geotiff
                 gv = tmp.geovirt(tmp.getData(tp=None),nodata=nodata)
                 tmp = None
+                
+                #remove temporary file
+                subprocess.call(['rm','-r','-f',d])
+                return gv
+            
+        except ImportError:
+            raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
+        
+    def reproject(self,srcSRS,outputTIF=None,nodata = None,resampleType=0):
+        '''Create a new reprojected geotiff according to the supplied spatial reference string
+        
+        Args:
+            srcSRS: optionally specify the EPSG number or proj4 string for the shapes projection to have it converted
+                    to match the geotiff's projection (EX: 4326, "EPSG:4326", "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs").
+            outputTIF: optional name for a new dataset if one is created
+            nodata: if defined, should be a list object with nodata values specified for the bands in secondTIF
+            resampleType: which resampling method should be used: one of 
+                          {
+                              GRA_NearestNeighbour = 0, GRA_Bilinear = 1, GRA_Cubic = 2, GRA_CubicSpline = 3,
+                              GRA_Lanczos = 4, GRA_Average = 5, GRA_Mode = 6
+                          }
+                          defaults to 0.
+                    
+        Returns:
+            A geotiff instance of the newly reprojected image
+'''
+
+        try:
+            from warpCopy import warp
+            d = None
+            dt = None
+            
+            if(nodata == None):
+                if(self.nodata == None):
+                    nodata = [None for x in xrange(bands)]
+                else:
+                    nodata = self.nodata
+            
+            for x,nd in enumerate(nodata):
+                if(nd == None):
+                    print "Warning: "+self.getPath()+" band "+repr(x)+" does not have an associated nodata value."
+                    
+            #create temporary file if output file is not desired
+            if(outputTIF==None):
+                d = tempfile.mkdtemp(prefix="pytiff")
+                    
+                outputTIF = os.path.join(d,'rpj.tif')
+            
+            #create temporary file if virtual
+            if self.isVirtual():
+                bands = self.bands
+                    
+                tp = self.data.dtype
+                dt = tempfile.mkdtemp(prefix="pytiff")
+                tmp = self.geocopy(os.path.join(dt,"temptif.tif"),self.getData(tp=None))
+            else:
+                tmp = self
+                
+            #determine type of input srs    
+            mode=0
+            
+            if(type(srcSRS)==int):
+                mode=1
+                srcSRS = repr(srcSRS)
+            elif(srcSRS.startswith('EPSG:') or srcSRS.startswith('epsg:') or srcSRS.startswith("Epsg:")):
+                srcSRS = srcSRS[5:]
+                mode=1
+
+            elif(srcSRS.startswith('+')):
+                mode=2
+           
+            print "Mode is",mode
+            warp(self.getPath(),outputTIF,nodata,resampleType,srcSRS,mode)
+            
+            #remove temp directory if self is virtual
+            if dt!=None:
+                subprocess.call(['rm','-r','-f',dt])
+                
+            if d==None:   
+                return geotiff(outputTIF)
+            else:
+                #create virtual geotiff
+                g = geotiff(outputTIF)
+                gv = g.geovirt(g.getData(tp=None),nodata=nodata)
+                g = None
                 
                 #remove temporary file
                 subprocess.call(['rm','-r','-f',d])
@@ -715,7 +810,7 @@ class geotiff:
             else:
                 gt = self.geoTransform
                 
-            bytes = np.fromstring(wkb,dtype=np.uint8);
+            sbytes = np.fromstring(wkb,dtype=np.uint8);
 
             #reproject shape if possible
             if self.projection!=None and srcSRS!=None:
@@ -731,9 +826,9 @@ class geotiff:
                 elif(srcSRS.startswith('+')):
                     mode=2
                     
-                bytes = shapeTransform(bytes,srcSRS,self.projection,mode)
+                sbytes = shapeTransform(sbytes,srcSRS,self.projection,mode)
                 
-            return shapeSlice(np.array(gt,dtype=np.float32),bytes,self.width,self.height)
+            return shapeSlice(np.array(gt,dtype=np.float32),sbytes,self.width,self.height)
             
         except ImportError:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
