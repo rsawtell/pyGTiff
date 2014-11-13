@@ -718,22 +718,6 @@ class geotiff:
             d = None
             dt = None
             
-            if(nodata == None):
-                if(self.nodata == None):
-                    nodata = [None for x in xrange(bands)]
-                else:
-                    nodata = self.nodata
-            
-            for x,nd in enumerate(nodata):
-                if(nd == None):
-                    print "Warning: "+self.getPath()+" band "+repr(x)+" does not have an associated nodata value."
-                    
-            #create temporary file if output file is not desired
-            if(outputTIF==None):
-                d = tempfile.mkdtemp(prefix="pytiff")
-                    
-                outputTIF = os.path.join(d,'rpj.tif')
-            
             #create temporary file if virtual
             if self.isVirtual():
                 bands = self.bands
@@ -743,6 +727,22 @@ class geotiff:
                 tmp = self.geocopy(os.path.join(dt,"temptif.tif"),self.getData(tp=None))
             else:
                 tmp = self
+            
+            if(nodata == None):
+                if(tmp.nodata == None):
+                    nodata = [None for x in xrange(bands)]
+                else:
+                    nodata = tmp.nodata
+            
+            for x,nd in enumerate(nodata):
+                if(nd == None):
+                    print "Warning: "+tmp.getPath()+" band "+repr(x)+" does not have an associated nodata value."
+                    
+            #create temporary file if output file is not desired
+            if(outputTIF==None):
+                d = tempfile.mkdtemp(prefix="pytiff")
+                    
+                outputTIF = os.path.join(d,'rpj.tif')
                 
             #determine type of input srs    
             mode=0
@@ -757,8 +757,7 @@ class geotiff:
             elif(srcSRS.startswith('+')):
                 mode=2
            
-            print "Mode is",mode
-            warp(self.getPath(),outputTIF,nodata,resampleType,srcSRS,mode)
+            warp(tmp.getPath(),outputTIF,nodata,resampleType,srcSRS,mode)
             
             #remove temp directory if self is virtual
             if dt!=None:

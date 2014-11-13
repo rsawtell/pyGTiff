@@ -1,12 +1,17 @@
 #!/usr/bin/env python
 from distutils.core import setup, Extension
 from distutils.command.build import build
-import numpy, sys
+import numpy, sys, platform
 
 #update to reflect your system
-gdal_lib='/usr/lib'
-gdal_inc='/usr/include/gdal'
-gdal_vers=''
+if platform.system() == 'Windows':
+    gdal_lib='C:\OSGeo4W\lib'
+    gdal_inc='C:\OSGeo4W\include'
+    gdal_vers='_i'
+else:
+    gdal_lib='/usr/lib'
+    gdal_inc='/usr/include/gdal'
+    gdal_vers=''
 
 warpCopyExt = Extension('pyGTiff.warpCopy', ['pyGTiff/warpCopy.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
 shapeExt = Extension('pyGTiff.shape', ['pyGTiff/shape.cpp'], include_dirs=['include',numpy.get_include(),gdal_inc],library_dirs = [gdal_lib],libraries=['gdal'+gdal_vers])
