@@ -852,8 +852,8 @@ class geotiff:
         Args: tuple containing (x,y) pixel coordinate, default is None
         
         Returns:
-            If point is None this returns a tuple containing (latitute, longitude) for every point in the image.
-            If point is specified, a tuple containing (latitude, longitude) for the specified point.
+            If point is None this returns a tuple containing the upper-left (longitude, latitute) in projected units for every pixel in the image.
+            If point is specified, a tuple containing the upper-left (longitude, latitude) for the specified point.
             Returns None if this geotiff has no projection information.'''
         
         #geotiff must have projection information for this to work
@@ -896,3 +896,17 @@ class geotiff:
             vals = i*[[lon],[lat]]
             
             return int(vals[0]),int(vals[1])
+        
+    def getBounds(self):
+        '''Returns the (N,W,S,E) bounding box of the image'''
+        
+        ullon, ullat = self.getCoord((0,0))
+        urlon, urlat = self.getCoord((self.width,0))
+        lllon, lllat = self.getCoord((0,self.height))
+        lrlon, lrlat = self.getCoord((self.width,self.height))
+        
+        lats = [ullat,urlat,lllat,lrlat]
+        lons = [ullon,urlon,lllon,lrlon]
+        
+        return (max(lats),min(lons),min(lats),max(lons))
+        
