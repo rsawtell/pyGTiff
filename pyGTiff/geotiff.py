@@ -22,6 +22,8 @@ try:
 except ImportError:
     import gdal
     
+gdal.UseExceptions()
+    
 import numpy as np
 import tempfile, os, subprocess
 
@@ -70,6 +72,31 @@ def gdaltype2np(gtype):
         return np.complex64
     elif(gtype == gdal.GDT_CFloat64):
         return np.complex128
+    
+def nptype2str(nptype):
+    '''Convert numpy data type to type string'''
+    if(nptype == np.bool):
+        return "Byte"
+    elif(nptype == np.uint8):
+        return "Byte"
+    elif(nptype == np.uint16):
+        return "UInt16"
+    elif(nptype == np.uint32):
+        return "UInt32"
+    elif(nptype == np.int16):
+        return "Int16"
+    elif(nptype == np.int32):
+        return "Int32"
+    elif(nptype == np.int64):
+        return "Int32"
+    elif(nptype == np.float32):
+        return "Float32"
+    elif(nptype == np.float64):
+        return "Float64"
+    elif(nptype == np.complex64):
+        return "CFloat32"
+    elif(nptype == np.complex128):
+        return "CFloat64"
 
 class geotiff:
     '''Convenience wrapper for handling GeoTIFF files using GDAL.'''
@@ -161,8 +188,62 @@ class geotiff:
             self.inputTIF = None
             self.nodata = [None for x in xrange(self.bands)]
             
+    def listFormats(self,short=False):
+        nd = gdal.GetDriverCount()
+        
+        wdr = []
+        
+        for x in xrange(nd):
+            drv = gdal.GetDriver(x)
+            if( ('DCAP_CREATE' in drv.GetMetadata() and drv.GetMetadata()['DCAP_CREATE'] == "YES") or
+                ('DCAP_CREATECOPY' in drv.GetMetadata() and drv.GetMetadata()['DCAP_CREATECOPY'] == "YES")):
+                if short:
+                    wdr += [drv.GetDescription()]
+                else:
+                    wdr += [drv.GetMetadata()['DMD_LONGNAME']+" ("+drv.GetDescription()+")"]
+        return wdr
+    
+    def __copy_SRS(self,dst_ds,data,nodata):
+            #write projection information if known
+            if(not (self.geoTransform==None or self.projection=="")):
+                dst_ds.SetGeoTransform(self.geoTransform)
+                dst_ds.SetProjection(self.projection)
+            
+            #write GCP information if known
+            if self.GCPs != () and self.GCPs != None:
+                
+                if self.gcpProjection != None and self.gcpProjection != "": #use gcpProjection if specified
+                    dst_ds.SetGCPs(self.GCPs,self.gcpProjection)
+                elif self.projection!=None and self.projection!="":#otherwise use projection if it is specified
+                    dst_ds.SetGCPs(self.GCPs,self.projection)
+                else:
+                    dst_ds.SetGCPs(self.GCPs,"")#no projection available (leave it up to user to figure it out)
+                    
+
+            #copy data into the new image and set nodata values as appropriate
+            if(data.ndim==3):
+                for x in xrange(0,len(data)):
+                    dst_dr = dst_ds.GetRasterBand(x+1)
+                    dst_dr.WriteArray(data[x])
+                    
+                    if(nodata != None and x<len(nodata) and nodata[x]!=None):
+                        dst_dr.SetNoDataValue(nodata[x])
+                    elif(self.inputTIF==None and x<len(self.nodata) and self.nodata[x]!=None):
+                        dst_dr.SetNoDataValue(self.nodata[x])
+                        
+            else:
+                dst_dr = dst_ds.GetRasterBand(1)
+                dst_dr.WriteArray(data)
+                
+                if(nodata != None and nodata[0]!=None):
+                        dst_dr.SetNoDataValue(nodata[0])
+                elif(self.inputTIF==None and self.nodata[0]!=None):
+                    dst_dr.SetNoDataValue(self.nodata[0])
+                    
+            return dst_ds
+            
       
-    def geocopy(self, outputTIF, data=None, nodata=None, options=[], create=False, compress=False):
+    def geocopy(self, outputTIF, data=None, nodata=None, options=[], create=False, compress=False, fformat="GTiff"):
         '''Create a new GeoTIFF file that posseses the same transform and projection as this geotiff, but with new data
         
         If this is a virtual geotiff and no input data is specified, this geotiff will instead be written to
@@ -196,14 +277,13 @@ class geotiff:
             IOError: Error occurred writing file to disk.
         '''
         
-        #check if the user supplied data, if they didn't this instance must be virtual
-        if data==None and self.data == None:
-            raise ValueError("You must specify data to be copied, this is not a virtual geotiff.")
-        
         #if virtual, get the data that will be written out
-        if data==None:
+        if data==None and self.data!=None:
             vrt=True
             data = self.data
+        elif data==None and self.data==None:
+            vrt=False
+            data = self.getData(tp=None)
         else:
             vrt=False
         
@@ -231,60 +311,56 @@ class geotiff:
         if bands>20:
             print "Warning: Excessive raster bands detected. Did you format your data properly?"
         
-        #create a new GeoTIFF
-        driver = gdal.GetDriverByName("GTiff")
+        #create a new file from the output format
+        driver = gdal.GetDriverByName(fformat)
         
+        if driver == None:
+            raise ValueError('Unrecognized file format "'+fformat+'"')
+        
+        if not fformat in self.listFormats(short=True):
+            raise IOError('"'+fformat+'" is not a writeable format')
+        
+        #validate output directory
         if(os.path.dirname(outputTIF) != '' and not os.path.isdir(os.path.dirname(outputTIF))):
             if(create):
                 os.mkdir(os.path.dirname(outputTIF))
             else:
                 raise IOError("Directory '"+os.path.dirname(outputTIF)+"' does not exist.")
             
-        dst_ds = driver.Create(outputTIF,self.width,self.height,bands,nptype2gdal(data.dtype),options)
+        #use CREATE first since it's simpler
+        if('DCAP_CREATE' in driver.GetMetadata() and driver.GetMetadata()['DCAP_CREATE'] == "YES"):
             
-        
-        if(dst_ds==None):
-            raise IOError("Error creating "+outputTIF)
+            dst_ds = driver.Create(outputTIF,self.width,self.height,bands,nptype2gdal(data.dtype),options)
                 
-        
-        #write projection information if known
-        if(not (self.geoTransform==None or self.projection=="")):
-            dst_ds.SetGeoTransform(self.geoTransform)
-            dst_ds.SetProjection(self.projection)
-        
-        #write GCP information if known
-        if self.GCPs != () and self.GCPs != None:
             
-            if self.gcpProjection != None and self.gcpProjection != "": #use gcpProjection if specified
-                dst_ds.SetGCPs(self.GCPs,self.gcpProjection)
-            elif self.projection!=None and self.projection!="":#otherwise use projection if it is specified
-                dst_ds.SetGCPs(self.GCPs,self.projection)
-            else:
-                dst_ds.SetGCPs(self.GCPs,"")#no projection available (leave it up to user to figure it out)
-                
-
-        #copy data into the new image and set nodata values as appropriate
-        if(data.ndim==3):
-            for x in xrange(0,len(data)):
-                dst_dr = dst_ds.GetRasterBand(x+1)
-                dst_dr.WriteArray(data[x])
-                
-                if(nodata != None and x<len(nodata) and nodata[x]!=None):
-                    dst_dr.SetNoDataValue(nodata[x])
-                elif(self.inputTIF==None and x<len(self.nodata) and self.nodata[x]!=None):
-                    dst_dr.SetNoDataValue(self.nodata[x])
+            if(dst_ds==None):
+                raise IOError("Error creating "+outputTIF)
                     
-        else:
-            dst_dr = dst_ds.GetRasterBand(1)
-            dst_dr.WriteArray(data)
             
-            if(nodata != None and nodata[0]!=None):
-                    dst_dr.SetNoDataValue(nodata[0])
-            elif(self.inputTIF==None and self.nodata[0]!=None):
-                dst_dr.SetNoDataValue(self.nodata[0])
+            self.__copy_SRS(dst_ds,data,nodata)
+                
+            dst_ds = None
             
-        dst_ds = None
-        
+        else: #use CREATECOPY using temporary file
+            
+            if not nptype2str(data.dtype) in driver.GetMetadata()['DMD_CREATIONDATATYPES']:
+                raise IOError(nptype2str(data.dtype)+" is not supported by "+fformat+".\nSupported types are: "+driver.GetMetadata()['DMD_CREATIONDATATYPES'])
+
+           
+            dt = tempfile.mkdtemp(prefix="pytiff")
+            temptif = self.geocopy(os.path.join(dt,"temptif.tif"),data)
+            
+            src_ds = gdal.Open(temptif.inputTIF, gdal.GA_ReadOnly)
+            dst_ds = driver.CreateCopy(outputTIF,src_ds,1)
+            
+            if dst_ds == None:
+                raise IOError("Failed to create output file")
+            
+            src_ds = None
+            dst_ds = None
+            
+            subprocess.call(['rm','-r','-f',dt])
+            
         #if this was a virtual geotiff that got written to disk, convert to regular geotiff
         if self.inputTIF==None and vrt:
             self.inputTIF = outputTIF

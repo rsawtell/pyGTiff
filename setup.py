@@ -29,7 +29,7 @@ if( "-noc" in sys.argv or "--noc" in sys.argv):
     
     
     setup (name = 'pyGTiff',
-        version = '1.0.2',
+        version = '1.0.3',
         author = 'Reid Sawtell',
         author_email = "rwsawtel@mtu.edu",
         url = 'https://bitbucket.org/rsawtell/pygtiff',
@@ -52,7 +52,7 @@ if( "-noc" in sys.argv or "--noc" in sys.argv):
 #compile with C++ extensions        
 else:
     setup (name = 'pyGTiff',
-        version = '1.0.2',
+        version = '1.0.3',
         author = 'Reid Sawtell',
         author_email = "rwsawtel@mtu.edu",
         url = 'https://bitbucket.org/rsawtell/pygtiff',
