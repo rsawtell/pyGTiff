@@ -32,7 +32,11 @@ Download one of the binary distributions and install
 Or from source:
 
 If you haven't done so already, extract the source archive contents to a temporary location or clone the repository
+
 Download and install Visual Studio 2008 Express
+
 open the OSGeo4W terminal
+
 cd to the location you put the source
+
 python setup.py install
