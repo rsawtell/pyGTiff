@@ -1,1 +1,1 @@
-from geotiff import geotiff
+from pyGTiff.geotiff import geotiff

@@ -155,7 +155,7 @@ class geotiff:
                 self.band = None
                 self.nodata = []
                 
-                for x in xrange(self.bands):
+                for x in range(self.bands):
                     self.nodata += [ds.GetRasterBand(x+1).GetNoDataValue()]
            
             self.shape = (self.bands,self.height,self.width)
@@ -186,14 +186,14 @@ class geotiff:
             self.GCPs = ()
             
             self.inputTIF = None
-            self.nodata = [None for x in xrange(self.bands)]
+            self.nodata = [None for x in range(self.bands)]
             
     def listFormats(self,short=False):
         nd = gdal.GetDriverCount()
         
         wdr = []
         
-        for x in xrange(nd):
+        for x in range(nd):
             drv = gdal.GetDriver(x)
             if( ('DCAP_CREATE' in drv.GetMetadata() and drv.GetMetadata()['DCAP_CREATE'] == "YES") or
                 ('DCAP_CREATECOPY' in drv.GetMetadata() and drv.GetMetadata()['DCAP_CREATECOPY'] == "YES")):
@@ -222,7 +222,7 @@ class geotiff:
 
             #copy data into the new image and set nodata values as appropriate
             if(data.ndim==3):
-                for x in xrange(0,len(data)):
+                for x in range(0,len(data)):
                     dst_dr = dst_ds.GetRasterBand(x+1)
                     dst_dr.WriteArray(data[x])
                     
@@ -309,7 +309,7 @@ class geotiff:
             raise ValueError("data should be 2 or 3 dimensional")
         
         if bands>20:
-            print "Warning: Excessive raster bands detected. Did you format your data properly?"
+            print("Warning: Excessive raster bands detected. Did you format your data properly?")
         
         #create a new file from the output format
         driver = gdal.GetDriverByName(fformat)
@@ -366,7 +366,7 @@ class geotiff:
         if self.inputTIF==None and vrt:
             self.inputTIF = outputTIF
             self.data = None
-            self.nodata = [None for x in xrange(self.bands)]
+            self.nodata = [None for x in range(self.bands)]
             return self
             
         else:#otherwise return the new geotiff
@@ -425,7 +425,7 @@ class geotiff:
         #'fix' nodata values in the data array to match the specified nodata
         if isinstance(data,np.ma.masked_array):
             if data.ndim==3:
-                for b in xrange(data.shape[0]):
+                for b in range(data.shape[0]):
                     if g.nodata[b]!=None:
                         g.data[b][data[b].mask!=0]==g.nodata[b]
             elif data.ndim==2:
@@ -528,7 +528,7 @@ class geotiff:
             
             mask = np.zeros(data.shape,dtype=np.bool)
             
-            for b in xrange(band.shape[0]):
+            for b in range(band.shape[0]):
                 mask[b] = data[b]==nd[b]
             
             return np.ma.masked_array(data,mask=mask)
@@ -692,7 +692,7 @@ class geotiff:
             NotImplementedError: if the C++ libraries are missing or broken'''
 
         try:
-            from warpCopy import warpCopy
+            from pyGTiff.warpCopy import warpCopy
             d=None
             dt=None
             
@@ -710,7 +710,7 @@ class geotiff:
             if secondTIF.isVirtual():
                 bands = secondTIF.bands
                 if(nodata == None):
-                    nodata = [None for x in xrange(bands)]
+                    nodata = [None for x in range(bands)]
                     
                 tp = secondTIF.data.dtype
                 dt = tempfile.mkdtemp(prefix="pytiff")
@@ -722,13 +722,13 @@ class geotiff:
                 bands = ds.RasterCount
 
                 if(nodata == None):
-                    nodata = [None for x in xrange(bands)]
-                for x in xrange(bands):
+                    nodata = [None for x in range(bands)]
+                for x in range(bands):
                     val = ds.GetRasterBand(x+1).GetNoDataValue()
                     if(nodata[x] == None):
                         nodata[x] = val
                         if(nodata[x] == None):
-                            print "Warning: "+secondTIF.getPath()+" band "+repr(x)+" does not have an associated nodata value."
+                            print("Warning: "+secondTIF.getPath()+" band "+repr(x)+" does not have an associated nodata value.")
                 
                 #get the data type for the new raster, assuming the first band in the second TIF is representative of all bands
                 tp = gdaltype2np(ds.GetRasterBand(1).DataType)
@@ -791,7 +791,7 @@ class geotiff:
 '''
 
         try:
-            from warpCopy import warp
+            from pyGTiff.warpCopy import warp
             d = None
             dt = None
             
@@ -807,13 +807,13 @@ class geotiff:
             
             if(nodata == None):
                 if(tmp.nodata == None):
-                    nodata = [None for x in xrange(bands)]
+                    nodata = [None for x in range(bands)]
                 else:
                     nodata = tmp.nodata
             
             for x,nd in enumerate(nodata):
                 if(nd == None):
-                    print "Warning: "+tmp.getPath()+" band "+repr(x)+" does not have an associated nodata value."
+                    print("Warning: "+tmp.getPath()+" band "+repr(x)+" does not have an associated nodata value.")
                     
             #create temporary file if output file is not desired
             if(outputTIF==None):
@@ -879,7 +879,7 @@ class geotiff:
 '''
 
         try:
-            from shape import shapeSlice,shapeTransform
+            from pyGTiff.shape import shapeSlice,shapeTransform
             
             if(self.geoTransform == None):
                 gt = (0,1,0,0,0,1)

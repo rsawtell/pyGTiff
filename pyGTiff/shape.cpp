@@ -337,16 +337,59 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
     return Py_BuildValue("N",(PyObject*)outdata);
 }
 
-static PyMethodDef shapeMethods[] = 
+struct shape_state
+{
+    PyObject *error;
+};
+
+#define GETSTATE(m) ((struct shape_state*)PyModule_GetState(m))
+
+static PyMethodDef shape_methods[] = 
 {
     {"shapeSlice",shapeSlice, METH_VARARGS, "Get a boolean array indexing the intersection of a raster and a shape"},
     {"shapeTransform",shapeTransform,METH_VARARGS, "Translate a shape from one projection into another"},
     {NULL, NULL, 0, NULL}
 };
 
-
-PyMODINIT_FUNC initshape(void)
+static int shape_traverse(PyObject *m, visitproc visit, void *arg)
 {
-    (void) Py_InitModule("shape", shapeMethods);
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
+}
+
+static int shape_clear(PyObject *m)
+{
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+
+static struct PyModuleDef shapedef = {
+  PyModuleDef_HEAD_INIT,
+  "shape",
+  NULL,
+  sizeof(struct shape_state),
+  shape_methods,
+  NULL,
+  shape_traverse,
+  shape_clear,
+  NULL
+};
+
+PyMODINIT_FUNC 
+PyInit_shape(void)
+{
+    PyObject *module = PyModule_Create(&shapedef);
     import_array();
+    
+    if (module == NULL)
+        return NULL;
+    struct shape_state *st = GETSTATE(module);
+
+    st->error = PyErr_NewException("shape.Error", NULL, NULL);
+    if (st->error == NULL) {
+        Py_DECREF(module);
+        return NULL;
+    }
+    
+    return module;
 }

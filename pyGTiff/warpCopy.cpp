@@ -316,15 +316,59 @@ static PyObject * warp(PyObject *self, PyObject *args)
     return Py_BuildValue("");
 }
 
-static PyMethodDef warpCopyMethods[] = 
+struct warpCopy_state
+{
+    PyObject *error;
+};
+
+#define GETSTATE(m) ((struct warpCopy_state*)PyModule_GetState(m))
+
+static PyMethodDef warpCopy_methods[] = 
 {
     {"warpCopy",warpCopy, METH_VARARGS, "reproject an image into another existing image"},
     {"warp",warp, METH_VARARGS, "reproject an image by specifying an output SRS"},
     {NULL, NULL, 0, NULL}
 };
 
-
-PyMODINIT_FUNC initwarpCopy(void)
+static int warpCopy_traverse(PyObject *m, visitproc visit, void *arg)
 {
-    (void) Py_InitModule("warpCopy", warpCopyMethods);
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
 }
+
+static int warpCopy_clear(PyObject *m)
+{
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+
+static struct PyModuleDef warpCopydef = {
+  PyModuleDef_HEAD_INIT,
+  "warpCopy",
+  NULL,
+  sizeof(struct warpCopy_state),
+  warpCopy_methods,
+  NULL,
+  warpCopy_traverse,
+  warpCopy_clear,
+  NULL
+};
+
+PyMODINIT_FUNC
+PyInit_warpCopy(void)
+{
+    PyObject *module = PyModule_Create(&warpCopydef);
+    
+    if (module == NULL)
+        return NULL;
+    struct warpCopy_state *st = GETSTATE(module);
+
+    st->error = PyErr_NewException("warpCopy.Error", NULL, NULL);
+    if (st->error == NULL) {
+        Py_DECREF(module);
+        return NULL;
+    }
+    
+    return module;
+}
+
