@@ -30,7 +30,7 @@ typedef unsigned char byte;
  * If the shape intersects partially and the region is a single pixel the proportion of overlap is recorded and processing stops
  * If the shape does not intersect processing stops
  */
-static void processArea(OGRPolygon* shape,double** lat, double** lon, float* tdata, float* odata, const int width, const int height, const double pixArea, int minx, int miny, int maxx, int maxy)
+static void processArea(OGRGeometry* shape,double** lat, double** lon, float* tdata, float* odata, const int width, const int height, const double pixArea, int minx, int miny, int maxx, int maxy)
 {
     //compute change in each direction
     int deltax = maxx-minx;
@@ -58,10 +58,12 @@ static void processArea(OGRPolygon* shape,double** lat, double** lon, float* tda
 
     double intArea = 0;
     
+    OGRGeometry* psint = NULL;
+    
     //compute the intersection with the polygon
     if(pixelPoly.Intersects(shape))
     {
-        OGRGeometry* psint = pixelPoly.Intersection(shape);
+        psint = pixelPoly.Intersection(shape);
         
         if(psint->getGeometryType()==wkbPolygon)
         {
@@ -99,11 +101,15 @@ static void processArea(OGRPolygon* shape,double** lat, double** lon, float* tda
         }
         else
         {
+            if(psint == NULL)
+            {
+                psint = shape;
+            }
             //split the group of pixels into 4 quandrants and recompute
-            processArea(shape,lat,lon,tdata,odata,width,height,pixArea,minx,                  miny,                  (int)(minx+deltax/2.0),(int)(miny+deltay/2.0));
-            processArea(shape,lat,lon,tdata,odata,width,height,pixArea,(int)(minx+deltax/2.0),miny,                  maxx,                  (int)(miny+deltay/2.0));
-            processArea(shape,lat,lon,tdata,odata,width,height,pixArea,(int)(minx+deltax/2.0),(int)(miny+deltay/2.0),maxx,                  maxy);
-            processArea(shape,lat,lon,tdata,odata,width,height,pixArea,minx,                  (int)(miny+deltay/2.0),(int)(minx+deltax/2.0),maxy);
+            processArea(psint,lat,lon,tdata,odata,width,height,pixArea,minx,                  miny,                  (int)(minx+deltax/2.0),(int)(miny+deltay/2.0));
+            processArea(psint,lat,lon,tdata,odata,width,height,pixArea,(int)(minx+deltax/2.0),miny,                  maxx,                  (int)(miny+deltay/2.0));
+            processArea(psint,lat,lon,tdata,odata,width,height,pixArea,(int)(minx+deltax/2.0),(int)(miny+deltay/2.0),maxx,                  maxy);
+            processArea(psint,lat,lon,tdata,odata,width,height,pixArea,minx,                  (int)(miny+deltay/2.0),(int)(minx+deltax/2.0),maxy);
         }
     }
 }
@@ -134,18 +140,26 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     }
     
     //convert wkb to polygon
-    byte* sdata = (byte*)PyArray_DATA(shapebinary);
-    OGRPolygon shape = OGRPolygon();
+    unsigned char* sdata = (unsigned char*)PyArray_DATA(shapebinary);
+    OGRGeometry* shape;
     
-    if(shape.importFromWkb(sdata))
+    if(OGRGeometryFactory::createFromWkb(sdata,NULL,&shape,-1))
     {
         PyErr_SetString(PyExc_ValueError,"Error parsing WKB data.");
         return NULL;
     }
     
-    if(!shape.IsValid())
+    if(!(shape->getGeometryType()==wkbPolygon || shape->getGeometryType()==wkbMultiPolygon))
     {
-        PyErr_SetString(PyExc_ValueError,"Polygon is invalid, please fix all geometry errors before intersecting.");
+        OGRGeometryFactory::destroyGeometry(shape);
+        PyErr_SetString(PyExc_ValueError,"Shape must be a Polygon or Multi-Polygon.");
+        return NULL;
+    }
+    
+    if(!shape->IsValid())
+    {
+        OGRGeometryFactory::destroyGeometry(shape);
+        PyErr_SetString(PyExc_ValueError,"Shape is invalid, please fix all geometry errors before intersecting.");
         return NULL;
     }
     
@@ -189,7 +203,7 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     pixelArea = pixelPoly.get_Area();
     
     //compute intersection of pixels and polygon
-    processArea(&shape,lat,lon,tdata,odata,width,height,pixelArea,0,0,width,height);
+    processArea(shape,lat,lon,tdata,odata,width,height,pixelArea,0,0,width,height);
     
     //normalize areas
     for(int i=0;i<height;i++)
@@ -201,6 +215,8 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     }
     
     //memory cleanup
+    OGRGeometryFactory::destroyGeometry(shape);
+    
     if(lat!=NULL)
     {
         for(int i=0;i<height;i++)
@@ -244,10 +260,14 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
     }
     
     //convert wkb to polygon
-    byte* sdata = (byte*)PyArray_DATA(shapebinary);
-    OGRPolygon shape = OGRPolygon();
+    unsigned char* sdata = (unsigned char*)PyArray_DATA(shapebinary);
+    OGRGeometry* shape;
     
-    if(shape.importFromWkb(sdata)) return NULL;
+    if(OGRGeometryFactory::createFromWkb(sdata,NULL,&shape,-1))
+    {
+        PyErr_SetString(PyExc_ValueError,"Error parsing WKB data.");
+        return NULL;
+    }
     
     OGRSpatialReference srs = OGRSpatialReference();
     
@@ -256,6 +276,7 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
         case 0://WKT
             if(srs.importFromWkt((char**)&srcWKT))
             {   
+                OGRGeometryFactory::destroyGeometry(shape);
                 PyErr_SetString(PyExc_ValueError,(std::string("Invalid WKT: ") + srcWKT).c_str());
                 return NULL;
             }
@@ -263,6 +284,7 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
         case 1://EPSG
             if(srs.importFromEPSG(atoi(srcWKT)))
             {
+                OGRGeometryFactory::destroyGeometry(shape);
                 PyErr_SetString(PyExc_ValueError,(std::string("Invalid EPSG number: ") + srcWKT).c_str());
                 return NULL;
             }
@@ -270,11 +292,13 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
         case 2://PROJ4
             if(srs.importFromProj4(srcWKT))
             {
+                OGRGeometryFactory::destroyGeometry(shape);
                 PyErr_SetString(PyExc_ValueError,(std::string("Invalid Proj4 String: ") + srcWKT).c_str());
                 return NULL;
             }
             break;
         default:
+            OGRGeometryFactory::destroyGeometry(shape);
             PyErr_SetString(PyExc_ValueError,"Mode must be one of: 0 - WKT, 1 - EPSG, 2 - Proj4");
             return NULL;
     }
@@ -282,6 +306,7 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
     OGRSpatialReference dst = OGRSpatialReference();
     if(dst.importFromWkt((char**)&dstWKT))
     {
+        OGRGeometryFactory::destroyGeometry(shape);
         PyErr_SetString(PyExc_ValueError,"Error determining destination spatial reference.");
         return NULL;
     }
@@ -289,16 +314,24 @@ static PyObject * shapeTransform(PyObject *self, PyObject *args)
     OGRCoordinateTransformation* trans = OGRCreateCoordinateTransformation(&srs,&dst);
     if(trans==NULL)
     {
+        OGRGeometryFactory::destroyGeometry(shape);
         PyErr_SetString(PyExc_ValueError,"Could not compute coordinate transformation.");
         return NULL;
     }
     
-    if(shape.transform(trans)) return NULL;
+    if(shape->transform(trans)) 
+    {
+        OGRGeometryFactory::destroyGeometry(shape);
+        return NULL;
+    };
     
-    int dimensions[1] = {shape.WkbSize()};
+    int dimensions[1] = {shape->WkbSize()};
     PyArrayObject* outdata = (PyArrayObject*)PyArray_FromDims(1,dimensions,PyArray_BYTE);
     
-    shape.exportToWkb(wkbNDR,(byte*)PyArray_DATA(outdata));
+    shape->exportToWkb(wkbNDR,(byte*)PyArray_DATA(outdata));
+    
+    //memory cleanup
+    OGRGeometryFactory::destroyGeometry(shape);
     
     //return data
     return Py_BuildValue("N",(PyObject*)outdata);

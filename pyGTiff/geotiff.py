@@ -243,7 +243,7 @@ class geotiff:
             return dst_ds
             
       
-    def geocopy(self, outputTIF, data=None, nodata=None, options=[], create=False, compress=False, fformat="GTiff"):
+    def geocopy(self, outputTIF, data=None, nodata=None, options=[], create=False, compress=False, fformat="GTiff", metadata = {}):
         '''Create a new GeoTIFF file that posseses the same transform and projection as this geotiff, but with new data
         
         If this is a virtual geotiff and no input data is specified, this geotiff will instead be written to
@@ -331,6 +331,7 @@ class geotiff:
         if('DCAP_CREATE' in driver.GetMetadata() and driver.GetMetadata()['DCAP_CREATE'] == "YES"):
             
             dst_ds = driver.Create(outputTIF,self.width,self.height,bands,nptype2gdal(data.dtype),options)
+            dst_ds.SetMetadata(metadata)
                 
             
             if(dst_ds==None):
