@@ -416,9 +416,7 @@ class geotiff:
         if(nodata!=None):
             g.nodata = nodata
         else:
-            if len(g.nodata)<g.bands:
-                g.nodata = [None]*g.bands
-            else:
+            if g.bands==self.bands:
                 g.nodata = self.nodata
         
         
