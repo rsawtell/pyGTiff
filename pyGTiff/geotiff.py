@@ -157,8 +157,11 @@ class geotiff:
                 
                 for x in xrange(self.bands):
                     self.nodata += [ds.GetRasterBand(x+1).GetNoDataValue()]
-           
-            self.shape = (self.bands,self.height,self.width)
+            
+            if self.bands==1:
+                self.shape = (self.height,self.width)
+            else:
+                self.shape = (self.bands,self.height,self.width)
             ds = None
 
         #virtual geotiff, does not assume any projection information -- must be set independently if known
@@ -170,13 +173,16 @@ class geotiff:
                 self.width = inputTIF.shape[2]
                 self.height = inputTIF.shape[1]
                 self.bands = inputTIF.shape[0]
-                self.shape = (self.bands,self.height,self.width)
+                if self.bands==1:
+                    self.shape = (self.height,self.width)
+                else:
+                    self.shape = (self.bands,self.height,self.width)
                 self.data = inputTIF
             else:
                 self.width = inputTIF.shape[1]
                 self.height = inputTIF.shape[0]
                 self.bands=1
-                self.shape = (1, self.height,self.width)
+                self.shape = (self.height,self.width)
                 self.data = np.array([inputTIF])
                 
             self.band = None
@@ -616,6 +622,7 @@ class geotiff:
                     
                 if (self.band!=None or self.bands==1):
                     x = x+1
+                    dim1=0
                 
                 if x==0:
                     dim1 = n
