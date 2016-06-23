@@ -475,7 +475,7 @@ class geotiff:
             band = band[0]
 
         #if this is a virual geotiff return data
-        if not self.data == None:
+        if not self.data is None:
             if self.data.ndim==3 and not band==None:
                 na  = self.data[band,yoff:yoff+ysize,xoff:xoff+xsize]
             elif self.data.ndim==3:
