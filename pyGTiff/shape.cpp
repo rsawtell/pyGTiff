@@ -151,7 +151,7 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
         return NULL;
     }
     
-    printf("%d\n",shape->getGeometryType());
+    //printf("%d\n",shape->getGeometryType());
     if(!(shape->getGeometryType()==wkbPolygon || shape->getGeometryType()==wkbMultiPolygon || shape->getGeometryType()==wkbGeometryCollection))
     {
         OGRGeometryFactory::destroyGeometry(shape);

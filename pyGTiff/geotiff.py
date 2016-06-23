@@ -284,10 +284,10 @@ class geotiff:
         '''
         
         #if virtual, get the data that will be written out
-        if data==None and self.data!=None:
+        if data is None and self.data is not None:
             vrt=True
             data = self.data
-        elif data==None and self.data==None:
+        elif data is None and self.data is None:
             vrt=False
             data = self.getData(tp=None)
         else:
