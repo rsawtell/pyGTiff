@@ -99,7 +99,7 @@ def nptype2str(nptype):
         return "CFloat64"
 
 class geotiff:
-    '''Convenience wrapper for handling GeoTIFF files using GDAL.'''
+    '''Convenience wrapper for handling GeoTIFF (or other raster) files using GDAL.'''
     
     def __init__(self,inputTIF,band=None):
         '''Create a geotiff instance using either a file or data.
@@ -129,7 +129,7 @@ class geotiff:
             
             ds = gdal.Open(self.inputTIF, gdal.GA_ReadOnly)
             
-            if ds == None:
+            if ds is None:
                 raise ValueError("Invalid file name: "+inputTIF)
             
             #get image information
@@ -143,7 +143,7 @@ class geotiff:
             self.data = None
             
             #if the user specified a band, treat the image as if it is the only one that exists
-            if not band == None:
+            if not band is None:
 
                 self.bands = 1
                 self.band = band
@@ -216,9 +216,9 @@ class geotiff:
                 dst_ds.SetProjection(self.projection)
             
             #write GCP information if known
-            if self.GCPs != () and self.GCPs != None:
+            if self.GCPs != () and not self.GCPs is None:
                 
-                if self.gcpProjection != None and self.gcpProjection != "": #use gcpProjection if specified
+                if not self.gcpProjection is None and self.gcpProjection != "": #use gcpProjection if specified
                     dst_ds.SetGCPs(self.GCPs,self.gcpProjection)
                 elif self.projection!=None and self.projection!="":#otherwise use projection if it is specified
                     dst_ds.SetGCPs(self.GCPs,self.projection)
@@ -320,14 +320,14 @@ class geotiff:
         #create a new file from the output format
         driver = gdal.GetDriverByName(fformat)
         
-        if driver == None:
+        if driver is None:
             raise ValueError('Unrecognized file format "'+fformat+'"')
         
         if not fformat in self.listFormats(short=True):
             raise IOError('"'+fformat+'" is not a writeable format')
         
         #validate output directory
-        if(os.path.dirname(outputTIF) != '' and not os.path.isdir(os.path.dirname(outputTIF))):
+        if os.path.dirname(outputTIF) != '' and not os.path.isdir(os.path.dirname(outputTIF)):
             if(create):
                 os.mkdir(os.path.dirname(outputTIF))
             else:
@@ -340,7 +340,7 @@ class geotiff:
             dst_ds.SetMetadata(metadata)
                 
             
-            if(dst_ds==None):
+            if dst_ds is None:
                 raise IOError("Error creating "+outputTIF)
                     
             
@@ -360,7 +360,7 @@ class geotiff:
             src_ds = gdal.Open(temptif.inputTIF, gdal.GA_ReadOnly)
             dst_ds = driver.CreateCopy(outputTIF,src_ds,1)
             
-            if dst_ds == None:
+            if dst_ds is None:
                 raise IOError("Failed to create output file")
             
             src_ds = None
@@ -369,10 +369,11 @@ class geotiff:
             subprocess.call(['rm','-r','-f',dt])
             
         #if this was a virtual geotiff that got written to disk, convert to regular geotiff
-        if self.inputTIF==None and vrt:
+        if self.inputTIF is None and vrt:
             self.inputTIF = outputTIF
             self.data = None
-            self.nodata = [None for x in xrange(self.bands)]
+            if self.nodata is None:
+                self.nodata = [None for x in xrange(self.bands)]
             return self
             
         else:#otherwise return the new geotiff
@@ -419,7 +420,7 @@ class geotiff:
         g.GCPs = self.GCPs
         
         #copy nodata values if supplied and number of bands matches
-        if(nodata!=None):
+        if not nodata is None:
             g.nodata = nodata
         else:
             if g.bands==self.bands:
@@ -455,20 +456,20 @@ class geotiff:
             Numpy array containing data read in from file.'''
 
         #set band restriction if it is in place
-        if not self.band == None:
+        if not self.band is None:
             band = self.band
         
         #setting band to -1 returns an array filled with ones with the same dimensions as a single band from this raster
         if band == -1:
             return np.ones((self.height,self.width),dtype=tp)
             
-        if xsize==None:
+        if xsize is None:
             xsize=self.width
             
-        if ysize==None:
+        if ysize is None:
             ysize=self.height
             
-        if band==None:
+        if band is None:
             band = range(0,self.bands)
             
         if isinstance(band,list) and len(band)==1:
@@ -519,7 +520,7 @@ class geotiff:
 
         nd = np.array([[x] for x in self.nodata])
         
-        if band==None or self.band==band:
+        if band is None or self.band==band:
             band=np.array(np.linspace(0,nd.shape[0]-1,nd.shape[0]),dtype=np.int32)
         else:
             if isinstance(band,int):
@@ -613,14 +614,14 @@ class geotiff:
         
         #slice over multiple dimensions
         if isinstance(slc,tuple):
-            if len(slc)>(3-(self.band!=None or self.bands==1)):
+            if len(slc)>(3-(not self.band is None or self.bands==1)):
                 raise IndexError("too many indices")
                  
             for x,n in enumerate(slc):
                 if isinstance(n,int):
                     n = [n]
                     
-                if (self.band!=None or self.bands==1):
+                if not self.band is None or self.bands==1:
                     x = x+1
                     dim1=0
                 
@@ -639,7 +640,7 @@ class geotiff:
         
         data = self.getData(tp=None,band=dim1,yoff=dim2[0],ysize=dim2[1],xoff=dim3[0],xsize=dim3[1])
         
-        if(data.ndim==2):
+        if data.ndim==2:
             return data[dim2slc,dim3slc]
         else:
             return data[:,dim2slc,dim2slc]
@@ -656,14 +657,14 @@ class geotiff:
         name = self.inputTIF[::-1]
         index = name.find(os.path.sep)
         
-        if(index == -1):
+        if index == -1:
             return name[::-1]
             
         return name[:index][::-1]
         
     def isVirtual(self):
         '''Return True if this is a virtual geotiff'''
-        return not self.data==None
+        return not self.data is None
         
     def nullMask(self):
         '''Return a single band virtual geotiff with all data values set to 255'''
@@ -709,13 +710,16 @@ class geotiff:
                 return secondTIF
             
             #if the second tiff has no projection information but matches the dimensions of the first, assume they are overlapping
-            if(secondTIF.geoTransform == (0,1,0,0,0,1) and secondTIF.projection == "" and  secondTIF.gcpProjection == "" and secondTIF.GCPs == () and self.height == secondTIF.height and self.width == secondTIF.width):
+            if secondTIF.geoTransform == (0,1,0,0,0,1) and secondTIF.projection == "" and  secondTIF.gcpProjection == "" and secondTIF.GCPs == () and self.height == secondTIF.height and self.width == secondTIF.width:
                 return secondTIF
             
             if secondTIF.isVirtual():
                 bands = secondTIF.bands
-                if(nodata == None):
-                    nodata = [None for x in xrange(bands)]
+                if nodata is None:
+                    if secondTIF.nodata is None:
+                        nodata = [None for x in xrange(bands)]
+                    else:
+                        nodata = secondTIF.nodata
                     
                 tp = secondTIF.data.dtype
                 dt = tempfile.mkdtemp(prefix="pytiff")
@@ -726,13 +730,13 @@ class geotiff:
                 ds = gdal.Open(secondTIF.getPath(),gdal.GA_ReadOnly)
                 bands = ds.RasterCount
 
-                if(nodata == None):
+                if nodata is None:
                     nodata = [None for x in xrange(bands)]
                 for x in xrange(bands):
                     val = ds.GetRasterBand(x+1).GetNoDataValue()
-                    if(nodata[x] == None):
+                    if nodata[x] is None:
                         nodata[x] = val
-                        if(nodata[x] == None):
+                        if nodata[x] is None:
                             print "Warning: "+secondTIF.getPath()+" band "+repr(x)+" does not have an associated nodata value."
                 
                 #get the data type for the new raster, assuming the first band in the second TIF is representative of all bands
@@ -748,7 +752,7 @@ class geotiff:
             tmp.nodata = nodata
             
             #create temporary file if output file is not desired
-            if(outputTIF==None):
+            if outputTIF is None:
                 d = tempfile.mkdtemp(prefix="pytiff")
                     
                 outputTIF = os.path.join(d,'rpj.tif')
@@ -759,13 +763,14 @@ class geotiff:
             warpCopy(secondTIF.getPath(),tmp.getPath(),nodata,resampleType)
             
             #remove temp directory if secondTIF was virtual
-            if dt!=None:
+            if not dt is None:
                 subprocess.call(['rm','-r','-f',dt])
             
-            if d==None:   
+            if d is None:   
                 return tmp
             else:
                 #create virtual geotiff
+                #print nodata
                 gv = tmp.geovirt(tmp.getData(tp=None),nodata=nodata)
                 tmp = None
                 
@@ -775,6 +780,108 @@ class geotiff:
             
         except ImportError:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
+        
+    def subset(self,lu,rl,nodata=None,mode='largest'):
+        '''Subset a geotiff
+        
+        Creates a subset image given the upper-left and lower-right pixels to include.
+        Use getXY to convert projected coordinates to image coordinates.
+        
+        Pixel values may be outside the original image, any new region will be filled with nodata values, or 0 if undefined.
+        
+        
+        Args:
+            ul: upper-left pixel coordinate represented as a tuple (x,y)
+            lr: lower-right pixel coordinate represented as a tuple (x,y)
+            nodata: if defined, should be a list object with nodata values specified, 
+                    defaults to existing nodata values for this(if any)
+            mode: behavior for fractional pixel indices:
+                smallest - smallest subset is chosen (round up the lower bound, round down the upper) 
+                largest - largest subset is chosen (round down the lower, round up the upper) (default)
+                nearest - indices are rounded to the nearest integer value
+            
+        Returns:
+            A geotiff instance of the subset area'''
+            
+        if nodata is None:
+            nodata = self.nodata
+        
+        if mode == 'smallest':
+            lu = [int(np.ceil(lu[0])),int(np.ceil(lu[1]))]
+            rl = [int(np.floor(rl[0])),int(np.floor(rl[1]))]
+        elif mode == 'nearest':
+            lu = [int(round(lu[0])),int(round(lu[1]))]
+            rl = [int(round(rl[0])),int(round(rl[1]))]
+        elif mode == 'largest':
+            lu = [int(np.floor(lu[0])),int(np.floor(lu[1]))]
+            rl = [int(np.ceil(rl[0])),int(np.ceil(rl[1]))]
+        else:
+            raise ValueError('Invalid mode, choices are {"smallest","largest","nearest"}')
+    
+        newshape = [rl[1] - lu[1], rl[0] - lu[0]]
+        
+        if newshape[0] <=0:
+            raise ValueError("Right index must be greater than Left index: got R:{}  L:{}".format(rl[0],lu[0]))
+        if newshape[1] <=0:
+            raise ValueError("Lower index must be greater than Upper index: got L:{}  U:{}".format(rl[1],lu[1]))
+        
+        if self.bands > 1:
+            newshape += [self.shape[2]]
+            
+        if self.isVirtual():
+            tp = data.dtype
+        else:
+            ds = gdal.Open(self.getPath(),gdal.GA_ReadOnly)
+            tp = gdaltype2np(ds.GetRasterBand(1).DataType)
+            ds = None
+        
+        newdata = np.ones(newshape,dtype=tp)
+        
+        if self.bands > 1:
+            height = self.shape[1]
+            width = self.shape[2]
+
+        else:
+            height = self.shape[0]
+            width = self.shape[1]
+        
+        slu = [max(0,lu[0]),max(0,lu[1])]
+        srl = [min(width,rl[0]),min(height,rl[1])]
+        
+        #initialize fill values
+        if self.bands > 1 and not nodata is None:
+            for b in xrange(self.bands):
+                if not nodata[b] is None:
+                    newdata[band] *= nodata[b]
+                else:
+                    newdata[band] *= 0
+        elif not nodata is None and not nodata[0] is None:
+            newdata *= nodata[0]
+        else:
+            newdata *= 0
+            
+        print slu,lu
+        print srl,rl
+        
+        #don't bother copying data if the two images don't overlap
+        if (srl[1] - slu[1]) > 0 and (srl[0] - slu[0]) > 0:
+            if self.bands > 1:
+                newdata[:,slu[1]-lu[1]:srl[1]-lu[1],slu[0]-lu[0]:srl[0]-lu[0]] = self[:,slu[1]:srl[1],slu[0]:srl[0]]
+            else:
+                newdata[slu[1]-lu[1]:srl[1]-lu[1],slu[0]-lu[0]:srl[0]-lu[0]] = self[slu[1]:srl[1],slu[0]:srl[0]]
+                
+        gt = self.geoTransform
+        initc = self.getCoord(lu)
+                
+        vtif = geotiff(newdata)
+        
+        vtif.geoTransform = (initc[0],gt[1],gt[2],initc[1],gt[4],gt[5])
+        vtif.projection = self.projection
+        vtif.nodata = nodata
+        
+        return vtif
+            
+        
         
     def reproject(self,srcSRS,outputTIF=None,nodata = None,resampleType=0):
         '''Create a new reprojected geotiff according to the supplied spatial reference string
@@ -810,18 +917,18 @@ class geotiff:
             else:
                 tmp = self
             
-            if(nodata == None):
-                if(tmp.nodata == None):
+            if nodata is None:
+                if tmp.nodata is None:
                     nodata = [None for x in xrange(bands)]
                 else:
                     nodata = tmp.nodata
             
             for x,nd in enumerate(nodata):
-                if(nd == None):
+                if nd is None:
                     print "Warning: "+tmp.getPath()+" band "+repr(x)+" does not have an associated nodata value."
                     
             #create temporary file if output file is not desired
-            if(outputTIF==None):
+            if outputTIF is None:
                 d = tempfile.mkdtemp(prefix="pytiff")
                     
                 outputTIF = os.path.join(d,'rpj.tif')
@@ -829,23 +936,23 @@ class geotiff:
             #determine type of input srs    
             mode=0
             
-            if(type(srcSRS)==int):
+            if type(srcSRS)==int:
                 mode=1
                 srcSRS = repr(srcSRS)
-            elif(srcSRS.startswith('EPSG:') or srcSRS.startswith('epsg:') or srcSRS.startswith("Epsg:")):
+            elif srcSRS.startswith('EPSG:') or srcSRS.startswith('epsg:') or srcSRS.startswith("Epsg:"):
                 srcSRS = srcSRS[5:]
                 mode=1
 
-            elif(srcSRS.startswith('+')):
+            elif srcSRS.startswith('+'):
                 mode=2
            
             warp(tmp.getPath(),outputTIF,nodata,resampleType,srcSRS,mode)
             
             #remove temp directory if self is virtual
-            if dt!=None:
+            if not dt is None:
                 subprocess.call(['rm','-r','-f',dt])
                 
-            if d==None:   
+            if d is None:   
                 return geotiff(outputTIF)
             else:
                 #create virtual geotiff
@@ -886,7 +993,7 @@ class geotiff:
         try:
             from shape import shapeSlice,shapeTransform
             
-            if(self.geoTransform == None):
+            if self.geoTransform is None:
                 gt = (0,1,0,0,0,1)
             else:
                 gt = self.geoTransform
@@ -894,7 +1001,7 @@ class geotiff:
             sbytes = np.fromstring(wkb,dtype=np.uint8);
 
             #reproject shape if possible
-            if self.projection!=None and srcSRS!=None:
+            if not self.projection is None and not srcSRS is None:
                 mode=0
                 
                 if(type(srcSRS)==int):
@@ -941,7 +1048,7 @@ class geotiff:
         if(self.projection!=None and self.geoTransform!=None):
             gt = self.geoTransform
             
-            if(point != None):
+            if not point is None:
                 x,y = point
                 
                 return (gt[0]+gt[1]*x+gt[2]*y, gt[3]+gt[4]*x+gt[5]*y)
@@ -964,7 +1071,7 @@ class geotiff:
             A tuple containing the (x,y) pixel coordinate'''
         
         #geotiff must have projection information for this to work
-        if(self.projection!=None and self.geoTransform!=None):
+        if not self.projection is None and not self.geoTransform is None:
             gt = self.geoTransform
             
             lon = lon-gt[0]

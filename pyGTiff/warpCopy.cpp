@@ -91,8 +91,8 @@ static PyObject * warpCopy(PyObject *self, PyObject *args)
             psWarpOptions->padfDstNoDataReal[i] = NAN;
         }
         
-        psWarpOptions->padfSrcNoDataImag[i] = NAN;
-        psWarpOptions->padfDstNoDataImag[i] = NAN;
+        psWarpOptions->padfSrcNoDataImag[i] = NULL;
+        psWarpOptions->padfDstNoDataImag[i] = NULL;
     }
 
     psWarpOptions->pfnProgress = GDALTermProgress;   
