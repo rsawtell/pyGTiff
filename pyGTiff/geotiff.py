@@ -829,13 +829,13 @@ class geotiff:
             newshape += [self.shape[2]]
             
         if self.isVirtual():
-            tp = data.dtype
+            tp = self.data.dtype
         else:
             ds = gdal.Open(self.getPath(),gdal.GA_ReadOnly)
             tp = gdaltype2np(ds.GetRasterBand(1).DataType)
             ds = None
         
-        newdata = np.ones(newshape,dtype=tp)
+        newdata = np.zeros(newshape,dtype=tp)
         
         if self.bands > 1:
             height = self.shape[1]
@@ -852,16 +852,16 @@ class geotiff:
         if self.bands > 1 and not nodata is None:
             for b in xrange(self.bands):
                 if not nodata[b] is None:
-                    newdata[band] *= nodata[b]
+                    newdata[band][:] = nodata[b]
                 else:
-                    newdata[band] *= 0
+                    newdata[band][:] = 0
         elif not nodata is None and not nodata[0] is None:
-            newdata *= nodata[0]
+            newdata[:] = nodata[0]
         else:
-            newdata *= 0
+            newdata[:] = 0
             
-        print slu,lu
-        print srl,rl
+        #print slu,lu
+        #print srl,rl
         
         #don't bother copying data if the two images don't overlap
         if (srl[1] - slu[1]) > 0 and (srl[0] - slu[0]) > 0:
@@ -879,7 +879,7 @@ class geotiff:
         vtif.projection = self.projection
         vtif.nodata = nodata
         
-        return vtif
+        return vtif,slu,srl
             
         
         
@@ -1060,7 +1060,7 @@ class geotiff:
                 
                 return (lon,lat)
             
-    def getXY(self, lon,lat):
+    def getXY(self, lon,lat,trim=True):
         '''Returns the x,y pixel coordinates of a Geolocated point in the image
         
         Args:
@@ -1083,7 +1083,10 @@ class geotiff:
             
             vals = i*[[lon],[lat]]
             
-            return int(vals[0]),int(vals[1])
+            if trim:
+                return int(vals[0]),int(vals[1])
+            else:
+                return vals[0],vals[1]
         
     def getBounds(self):
         '''Returns the (N,W,S,E) bounding box of the image'''
