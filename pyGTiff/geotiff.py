@@ -826,7 +826,7 @@ class geotiff:
             raise ValueError("Lower index must be greater than Upper index: got L:{}  U:{}".format(rl[1],lu[1]))
         
         if self.bands > 1:
-            newshape += [self.shape[2]]
+            newshape = [self.bands] + newshape
             
         if self.isVirtual():
             tp = self.data.dtype
@@ -852,9 +852,9 @@ class geotiff:
         if self.bands > 1 and not nodata is None:
             for b in xrange(self.bands):
                 if not nodata[b] is None:
-                    newdata[band][:] = nodata[b]
+                    newdata[b][:] = nodata[b]
                 else:
-                    newdata[band][:] = 0
+                    newdata[b][:] = 0
         elif not nodata is None and not nodata[0] is None:
             newdata[:] = nodata[0]
         else:
