@@ -67,13 +67,15 @@ static void processArea(OGRGeometry* shape,double** lat, double** lon, float* td
         
         if(psint->getGeometryType()==wkbPolygon)
         {
-        
-            intArea = ((OGRPolygon*)psint)->get_Area();
-            
+            intArea = ((OGRPolygon*)psint)->get_Area(); 
         }
         else if(psint->getGeometryType()==wkbMultiPolygon)
         {
             intArea = ((OGRMultiPolygon*)psint)->get_Area();
+        }
+        else if(psint->getGeometryType()==wkbGeometryCollection)
+        {
+            intArea = ((OGRGeometryCollection*)psint)->get_Area();
         }
     }
     
@@ -149,7 +151,8 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
         return NULL;
     }
     
-    if(!(shape->getGeometryType()==wkbPolygon || shape->getGeometryType()==wkbMultiPolygon))
+    //printf("%d\n",shape->getGeometryType());
+    if(!(shape->getGeometryType()==wkbPolygon || shape->getGeometryType()==wkbMultiPolygon || shape->getGeometryType()==wkbGeometryCollection))
     {
         OGRGeometryFactory::destroyGeometry(shape);
         PyErr_SetString(PyExc_ValueError,"Shape must be a Polygon or Multi-Polygon.");
