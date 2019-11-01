@@ -211,7 +211,7 @@ class geotiff:
     
     def __copy_SRS(self,dst_ds,data,nodata):
             #write projection information if known
-            if(not (self.geoTransform==None or self.projection=="")):
+            if(not (self.geoTransform is None or self.projection=="")):
                 dst_ds.SetGeoTransform(self.geoTransform)
                 dst_ds.SetProjection(self.projection)
             
@@ -234,7 +234,7 @@ class geotiff:
                     
                     if(nodata != None and x<len(nodata) and nodata[x]!=None):
                         dst_dr.SetNoDataValue(nodata[x])
-                    elif(self.inputTIF==None and x<len(self.nodata) and self.nodata[x]!=None):
+                    elif(self.inputTIF is None and x<len(self.nodata) and self.nodata[x]!=None):
                         dst_dr.SetNoDataValue(self.nodata[x])
                         
             else:
@@ -243,7 +243,7 @@ class geotiff:
                 
                 if(nodata != None and nodata[0]!=None):
                         dst_dr.SetNoDataValue(nodata[0])
-                elif(self.inputTIF==None and self.nodata[0]!=None):
+                elif(self.inputTIF is None and self.nodata[0]!=None):
                     dst_dr.SetNoDataValue(self.nodata[0])
                     
             return dst_ds
@@ -477,14 +477,14 @@ class geotiff:
 
         #if this is a virual geotiff return data
         if not self.data is None:
-            if self.data.ndim==3 and not band==None:
+            if self.data.ndim==3 and not band is None:
                 na  = self.data[band,yoff:yoff+ysize,xoff:xoff+xsize]
             elif self.data.ndim==3:
                 na  = self.data[:,yoff:yoff+ysize,xoff:xoff+xsize]
             else:
                 na = self.data[yoff:yoff+ysize,xoff:xoff+xsize]
             
-            if tp==None:
+            if tp is None:
                 return self.__ndma__(na,band=band)
             else:
                 return self.__ndma__(np.array(na,dtype=tp),band=band)
@@ -496,7 +496,7 @@ class geotiff:
         if isinstance(band,int):
             na = ds.GetRasterBand(band+1).ReadAsArray(xoff,yoff,xsize,ysize)
         else:
-            if(tp==None):
+            if(tp is None):
                 na = np.array([ds.GetRasterBand(x+1).ReadAsArray(xoff,yoff,xsize,ysize) for x in band])
             else:
                 na = np.array([ds.GetRasterBand(x+1).ReadAsArray(xoff,yoff,xsize,ysize) for x in band], dtype=tp)
@@ -515,7 +515,7 @@ class geotiff:
         Note that masked arrays behave differently than normal numpy arrays for some operations,
         because of this masked arrays are returned regardless of nodata values for consistent behavior.'''
         
-        if self.nodata==None:
+        if self.nodata is None:
             return np.ma.masked_array(data)
 
         nd = np.array([[x] for x in self.nodata])
@@ -574,7 +574,7 @@ class geotiff:
             slc2 = list(slc.indices(mx))
             #print '>>>',slc2
             
-            if(slc.step>0 or slc.step==None):
+            if(slc.step is None or slc.step>0):
                 rng = (slc2[0],slc2[1]-slc2[0])
             else:
                 rng = (slc2[1]+1,slc2[0]-slc2[1])
