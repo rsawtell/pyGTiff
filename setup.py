@@ -29,7 +29,7 @@ if( "-noc" in sys.argv or "--noc" in sys.argv):
     
     
     setup (name = 'pyGTiff',
-        version = '1.0.4',
+        version = '1.0.5',
         author = 'Reid Sawtell',
         author_email = "rwsawtel@mtu.edu",
         url = 'https://bitbucket.org/rsawtell/pygtiff',
