@@ -26,6 +26,8 @@ gdal.UseExceptions()
     
 import numpy as np
 import tempfile, os, subprocess
+from osgeo import ogr
+from osgeo import osr
 
 def nptype2gdal(nptype):
     '''Convert numpy data type to GDAL data type'''
@@ -247,6 +249,26 @@ class geotiff:
                     dst_dr.SetNoDataValue(self.nodata[0])
                     
             return dst_ds
+        
+    def getSRS(self):
+        '''Get an osr SpatialReference for this raster
+        
+        Returns:
+            osr SpatialReference object
+            None if projection isn't defined
+            None if osr doesn't understand the projection text
+'''
+        
+        if(self.projection != ""):
+            srs = osr.SpatialReference()
+            rc = srs.ImportFromWkt(self.projection)
+            
+            if rc != 0:
+                return None
+            
+            return srs
+        else:
+            return None
             
       
     def geocopy(self, outputTIF, data=None, nodata=None, options=[], create=False, compress=False, fformat="GTiff", metadata = {}):
@@ -801,7 +823,7 @@ class geotiff:
                 nearest - indices are rounded to the nearest integer value
             
         Returns:
-            A geotiff instance of the subset area'''
+            A geotiff instance of the subset area and the adjusted pixel coordinates used to extract the subset'''
             
         if nodata is None:
             nodata = self.nodata
@@ -880,7 +902,54 @@ class geotiff:
         vtif.nodata = nodata
         
         return vtif,slu,srl
+    
+    def subset_other(self,secondTIF,lu=None,rl=None,nodata=None,mode='largest'):
+        '''Subset a second raster using the pixel coordinates from this raster
+        
+        Args:
+            secondTIF: raster to subset
+            ul: upper-left pixel coordinate represented as a tuple (x,y), default (0,0)
+            lr: lower-right pixel coordinate represented as a tuple (x,y), default (width,heigh) of this raster
+            nodata: if defined, should be a list object with nodata values specified, 
+                    defaults to existing nodata values for this(if any)
+            mode: behavior for fractional pixel indices:
+                smallest - smallest subset is chosen (round up the lower bound, round down the upper) 
+                largest - largest subset is chosen (round down the lower, round up the upper) (default)
+                nearest - indices are rounded to the nearest integer value
             
+        Returns:
+            A geotiff instance of the subset area and the adjusted pixel coordinates used to extract the subset'''
+            
+        if(lu is None):
+            lu = (0,0)
+            
+        if(rl is None):
+            
+            if self.bands > 1:
+                rl = (self.shape[2],self.shape[1])
+
+            else:
+                rl = (self.shape[1],self.shape[0])
+                
+        print lu,rl
+                
+        #convert pixel indices to coordinates
+        lu = self.getCoord(lu)
+        rl = self.getCoord(rl)
+
+        transform = osr.CoordinateTransformation(self.getSRS(), secondTIF.getSRS())
+        
+        #apply coordinate transform
+        point = ogr.CreateGeometryFromWkt("POINT ({} {})".format(lu[0],lu[1]))
+        point.Transform(transform)
+        tlu = secondTIF.getXY(point.GetX(),point.GetY())
+
+        point = ogr.CreateGeometryFromWkt("POINT ({} {})".format(rl[0],rl[1]))
+        point.Transform(transform)
+        trl = secondTIF.getXY(point.GetX(),point.GetY())
+        
+        #get the subset
+        return secondTIF.subset(tlu,trl,nodata=nodata,mode=mode)
         
         
     def reproject(self,srcSRS,outputTIF=None,nodata = None,resampleType=0):
@@ -1053,7 +1122,7 @@ class geotiff:
                 
                 return (gt[0]+gt[1]*x+gt[2]*y, gt[3]+gt[4]*x+gt[5]*y)
             else:
-                mgx,mgy = np.meshgrid(np.arange(0,self.width,1), np.arange(0,self.height,1))
+                mgx,mgy = np.meshgrid(np.arange(0,self.width,1), np.arange(0,self.height,1),copy=False)
                 
                 lon = gt[0]+gt[1]*mgx+gt[2]*mgy
                 lat = gt[3]+gt[4]*mgx+gt[5]*mgy
