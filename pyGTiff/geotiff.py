@@ -395,7 +395,7 @@ class geotiff:
             self.inputTIF = outputTIF
             self.data = None
             if self.nodata is None:
-                self.nodata = [None for x in xrange(self.bands)]
+                self.nodata = [None for x in range(self.bands)]
             return self
             
         else:#otherwise return the new geotiff
@@ -739,7 +739,7 @@ class geotiff:
                 bands = secondTIF.bands
                 if nodata is None:
                     if secondTIF.nodata is None:
-                        nodata = [None for x in xrange(bands)]
+                        nodata = [None for x in range(bands)]
                     else:
                         nodata = secondTIF.nodata
                     
@@ -766,6 +766,9 @@ class geotiff:
 
                 
                 ds = None
+                
+            if len(nodata) != bands:
+                raise ValueError("Specified nodata values do not match the number of bands!")
             
             #create the new dataset
             na = np.zeros((bands,self.height,self.width),dtype=tp)
@@ -872,7 +875,7 @@ class geotiff:
         
         #initialize fill values
         if self.bands > 1 and not nodata is None:
-            for b in xrange(self.bands):
+            for b in range(self.bands):
                 if not nodata[b] is None:
                     newdata[b][:] = nodata[b]
                 else:
@@ -931,7 +934,7 @@ class geotiff:
             else:
                 rl = (self.shape[1],self.shape[0])
                 
-        print lu,rl
+        print(lu,rl)
                 
         #convert pixel indices to coordinates
         lu = self.getCoord(lu)
