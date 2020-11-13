@@ -806,7 +806,7 @@ class geotiff:
         except ImportError:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
         
-    def subset(self,lu,rl,nodata=None,mode='largest'):
+    def subset(self,lu,rl,nodata=None,mode='largest',bands2use=None):
         '''Subset a geotiff
         
         Creates a subset image given the upper-left and lower-right pixels to include.
@@ -830,6 +830,11 @@ class geotiff:
             
         if nodata is None:
             nodata = self.nodata
+            
+        if bands2use is None:
+            bands2use = [x for x in range(0,self.bands)]
+        
+        bandcount = len(bands2use)
         
         if mode == 'smallest':
             lu = [int(np.ceil(lu[0])),int(np.ceil(lu[1]))]
@@ -851,7 +856,7 @@ class geotiff:
             raise ValueError("Lower index must be greater than Upper index: got L:{}  U:{}".format(rl[1],lu[1]))
         
         if self.bands > 1:
-            newshape = [self.bands] + newshape
+            newshape = [bandcount] + newshape
             
         if self.isVirtual():
             tp = self.data.dtype
@@ -875,11 +880,11 @@ class geotiff:
         
         #initialize fill values
         if self.bands > 1 and not nodata is None:
-            for b in range(self.bands):
+            for nb,b in enumerate(bands2use):
                 if not nodata[b] is None:
-                    newdata[b][:] = nodata[b]
+                    newdata[nb][:] = nodata[b]
                 else:
-                    newdata[b][:] = 0
+                    newdata[nb][:] = 0
         elif not nodata is None and not nodata[0] is None:
             newdata[:] = nodata[0]
         else:
@@ -891,7 +896,7 @@ class geotiff:
         #don't bother copying data if the two images don't overlap
         if (srl[1] - slu[1]) > 0 and (srl[0] - slu[0]) > 0:
             if self.bands > 1:
-                newdata[:,slu[1]-lu[1]:srl[1]-lu[1],slu[0]-lu[0]:srl[0]-lu[0]] = self[:,slu[1]:srl[1],slu[0]:srl[0]]
+                newdata[:,slu[1]-lu[1]:srl[1]-lu[1],slu[0]-lu[0]:srl[0]-lu[0]] = self[bands2use,slu[1]:srl[1],slu[0]:srl[0]]
             else:
                 newdata[slu[1]-lu[1]:srl[1]-lu[1],slu[0]-lu[0]:srl[0]-lu[0]] = self[slu[1]:srl[1],slu[0]:srl[0]]
                 
@@ -906,7 +911,7 @@ class geotiff:
         
         return vtif,slu,srl
     
-    def subset_other(self,secondTIF,lu=None,rl=None,nodata=None,mode='largest'):
+    def subset_other(self,secondTIF,lu=None,rl=None,nodata=None,mode='largest',bands2use=None):
         '''Subset a second raster using the pixel coordinates from this raster
         
         Args:
@@ -945,14 +950,14 @@ class geotiff:
         #apply coordinate transform
         point = ogr.CreateGeometryFromWkt("POINT ({} {})".format(lu[0],lu[1]))
         point.Transform(transform)
-        tlu = secondTIF.getXY(point.GetX(),point.GetY())
+        tlu = secondTIF.getXY(point.GetX(),point.GetY(),trim=False)
 
         point = ogr.CreateGeometryFromWkt("POINT ({} {})".format(rl[0],rl[1]))
         point.Transform(transform)
-        trl = secondTIF.getXY(point.GetX(),point.GetY())
+        trl = secondTIF.getXY(point.GetX(),point.GetY(),trim=False)
         
         #get the subset
-        return secondTIF.subset(tlu,trl,nodata=nodata,mode=mode)
+        return secondTIF.subset(tlu,trl,nodata=nodata,mode=mode,bands2use=bands2use)
         
         
     def reproject(self,srcSRS,outputTIF=None,nodata = None,resampleType=0):
@@ -1158,7 +1163,7 @@ class geotiff:
             if trim:
                 return int(vals[0]),int(vals[1])
             else:
-                return vals[0],vals[1]
+                return float(vals[0]),float(vals[1])
         
     def getBounds(self):
         '''Returns the (N,W,S,E) bounding box of the image'''
