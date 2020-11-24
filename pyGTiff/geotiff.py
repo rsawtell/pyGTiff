@@ -850,9 +850,9 @@ class geotiff:
     
         newshape = [rl[1] - lu[1], rl[0] - lu[0]]
         
-        if newshape[0] <=0:
-            raise ValueError("Right index must be greater than Left index: got R:{}  L:{}".format(rl[0],lu[0]))
         if newshape[1] <=0:
+            raise ValueError("Right index must be greater than Left index: got R:{}  L:{}".format(rl[0],lu[0]))
+        if newshape[0] <=0:
             raise ValueError("Lower index must be greater than Upper index: got L:{}  U:{}".format(rl[1],lu[1]))
         
         if self.bands > 1:
@@ -939,7 +939,7 @@ class geotiff:
             else:
                 rl = (self.shape[1],self.shape[0])
                 
-        print(lu,rl)
+        #print(lu,rl)
                 
         #convert pixel indices to coordinates
         lu = self.getCoord(lu)
