@@ -30,7 +30,7 @@ typedef unsigned char byte;
  * If the shape intersects partially and the region is a single pixel the proportion of overlap is recorded and processing stops
  * If the shape does not intersect processing stops
  */
-static void processArea(OGRGeometry* shape,double** lat, double** lon, float* tdata, float* odata, const int width, const int height, const double pixArea, int minx, int miny, int maxx, int maxy)
+static void processArea(OGRGeometry* shape,double** lat, double** lon, PyArrayObject* tdata, PyArrayObject* odata, const int width, const int height, const double pixArea, int minx, int miny, int maxx, int maxy)
 {
     //compute change in each direction
     int deltax = maxx-minx;
@@ -82,7 +82,8 @@ static void processArea(OGRGeometry* shape,double** lat, double** lon, float* td
     //if only one pixel, record the area of overlap
     if(deltax==1 && deltay==1)
     {
-        odata[miny*width+minx] = intArea;
+        //odata[miny*width+minx] = intArea;
+        *((float*)PyArray_GETPTR2(odata,miny,minx)) = intArea;
     }
     else
     {
@@ -93,7 +94,8 @@ static void processArea(OGRGeometry* shape,double** lat, double** lon, float* td
             {
                 for(int j=minx; j<maxx; j++)
                 {
-                   odata[i*width+j] = pixArea; 
+                   //odata[i*width+j] = pixArea; 
+                    *((float*)PyArray_GETPTR2(odata,i,j)) = pixArea;
                 }
             }
         }
@@ -167,11 +169,11 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     }
     
     //create the output data array
-    int dimensions[2] = {height,width};
-    PyArrayObject* outdata = (PyArrayObject*)PyArray_FromDims(2,dimensions,PyArray_FLOAT);
+    npy_intp dimensions[2] = {height,width};
+    PyArrayObject* outdata = (PyArrayObject*)PyArray_ZEROS(2,dimensions,PyArray_FLOAT,0);
     
-    float* odata = (float*) PyArray_DATA(outdata);
-    float* tdata = (float*) PyArray_DATA(transform);
+    //float* odata = (float*) PyArray_DATA(outdata);
+    //float* tdata = (float*) PyArray_DATA(transform);
     
     //initialize lat/lon coords for all pixel corners
     lat = new double*[height+1];
@@ -184,8 +186,8 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
         
         for(int j=0;j<=width;j++)
         {
-            lon[i][j] = tdata[0] + tdata[1]*j + tdata[2]*i;
-            lat[i][j] = tdata[3] + tdata[4]*j + tdata[5]*i;
+            lon[i][j] = *((float*)PyArray_GETPTR1(transform,0)) + *((float*)PyArray_GETPTR1(transform,1))*j + *((float*)PyArray_GETPTR1(transform,2))*i;
+            lat[i][j] = *((float*)PyArray_GETPTR1(transform,3)) + *((float*)PyArray_GETPTR1(transform,4))*j + *((float*)PyArray_GETPTR1(transform,5))*i;
         }
     }
     
@@ -206,14 +208,15 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     pixelArea = pixelPoly.get_Area();
     
     //compute intersection of pixels and polygon
-    processArea(shape,lat,lon,tdata,odata,width,height,pixelArea,0,0,width,height);
+    processArea(shape,lat,lon,transform,outdata,width,height,pixelArea,0,0,width,height);
     
     //normalize areas
     for(int i=0;i<height;i++)
     {
         for(int j=0;j<width;j++)
         {
-            odata[i*width+j] /= pixelArea;
+            //odata[i*width+j] /= pixelArea;
+            *((float*)PyArray_GETPTR2(outdata,i,j)) /= pixelArea;
         }
     }
     

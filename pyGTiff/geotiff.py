@@ -727,6 +727,9 @@ class geotiff:
             if not isinstance(secondTIF,geotiff):
                 raise TypeError("secondTIF must be a valid geotiff object")
             
+            if(self.projection is None or self.projection == '' or (self.GCPs is None and self.geoTransform is None)):
+                raise ValueError("This geotiff object must have a valid projection and either valid GCPs or a geoTransform")
+            
             #check to make sure we really need to warp
             if(self.geoTransform == secondTIF.geoTransform and self.projection == secondTIF.projection and self.gcpProjection == secondTIF.gcpProjection and self.GCPs == secondTIF.GCPs and self.height == secondTIF.height and self.width == secondTIF.width):
                 return secondTIF
@@ -813,7 +816,6 @@ class geotiff:
         Use getXY to convert projected coordinates to image coordinates.
         
         Pixel values may be outside the original image, any new region will be filled with nodata values, or 0 if undefined.
-        
         
         Args:
             ul: upper-left pixel coordinate represented as a tuple (x,y)
@@ -1143,6 +1145,8 @@ class geotiff:
         Args:
             lon - longitude of the x,y point in projected units
             lat - latitude of the x,y point in projected units
+            trim - truncate non-integer values (default = True)
+                   You will want to set this to False if you are using it as input for the subset function
             
         Returns:
             A tuple containing the (x,y) pixel coordinate'''
