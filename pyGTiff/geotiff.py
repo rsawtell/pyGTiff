@@ -1095,10 +1095,41 @@ class geotiff:
                     
                 sbytes = shapeTransform(sbytes,srcSRS,self.projection,mode)
                 
-            return shapeSlice(np.array(gt,dtype=np.float32),sbytes,self.width,self.height)
+            return shapeSlice(np.array(gt,dtype=np.float64),sbytes,self.width,self.height)
             
         except ImportError:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
+        
+    def polygonizeMask(self,mask):
+        ''''''
+        #try:
+        from pyGTiff.shape import polygonize as p_
+        
+        if self.geoTransform is None:
+            gt = (0,1,0,0,0,1)
+        else:
+            gt = self.geoTransform
+            
+        if isinstance(mask,np.ma.masked_array):
+            mask = mask.data
+        
+        if not isinstance(mask,np.ndarray) or mask.dtype != np.bool:
+            raise TypeError("mask should be numpy Boolean array")
+        
+        #check that dimensions match
+        if mask.ndim==2:
+            if not (mask.shape[0] == self.height and mask.shape[1] == self.width):
+                raise ValueError("mask shape must match image dimensions")
+        else:
+            raise ValueError("mask should be 2 dimensional")
+        
+        wkb = p_(np.array(gt,dtype=np.float32),mask,self.width,self.height)
+        
+        return wkb
+            
+        #except ImportError:
+        #    raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
+            
         
     def getPixelArea(self):
         '''Returns the area of the pixel in projected units (or 1 if unprojected)'''

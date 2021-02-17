@@ -20,6 +20,7 @@
 #include "ogr_api.h"
 #include "ogr_geometry.h"
 #include "string"
+#include "list"
 
 typedef unsigned char byte;
 
@@ -30,7 +31,7 @@ typedef unsigned char byte;
  * If the shape intersects partially and the region is a single pixel the proportion of overlap is recorded and processing stops
  * If the shape does not intersect processing stops
  */
-static void processArea(OGRGeometry* shape,double** lat, double** lon, PyArrayObject* tdata, PyArrayObject* odata, const int width, const int height, const double pixArea, int minx, int miny, int maxx, int maxy)
+static void processArea(OGRGeometry* shape,double** lat, double** lon, PyArrayObject* tdata, PyArrayObject* odata, const int width, const int height, const double pixArea,const int minx,const int miny,const int maxx,const int maxy)
 {
     //compute change in each direction
     int deltax = maxx-minx;
@@ -76,17 +77,27 @@ static void processArea(OGRGeometry* shape,double** lat, double** lon, PyArrayOb
         else if(psint->getGeometryType()==wkbGeometryCollection)
         {
             intArea = ((OGRGeometryCollection*)psint)->get_Area();
+            //printf("%d,%d - %d,%d\n",minx,miny,maxx,maxy);
         }
     }
+    else
+    {
+        //printf("%d,%d - %d,%d --\n",minx,miny,maxx,maxy);
+        return;
+    }
+    
+    //printf("%d,%d - %d,%d %f\n",minx,miny,maxx,maxy,intArea/regionArea);
     
     //if only one pixel, record the area of overlap
     if(deltax==1 && deltay==1)
     {
         //odata[miny*width+minx] = intArea;
-        *((float*)PyArray_GETPTR2(odata,miny,minx)) = intArea;
+        *((float*)PyArray_GETPTR2(odata,miny,minx)) = intArea/regionArea;
+        //printf(">%d,%d -> %d,%d : %f -- %f\n",miny,minx,maxy,maxx,intArea/pixArea,regionArea/pixArea);
     }
     else
     {
+        //printf("%d,%d :: %d,%d R:%f I:%f  %d\n",minx,maxx,miny,maxy,regionArea/pixArea,intArea/pixArea,regionArea==intArea);
         //if the entire set of pixels is contained within the polygon, record them all as max area per pixel
         if(regionArea==intArea)
         {
@@ -95,27 +106,691 @@ static void processArea(OGRGeometry* shape,double** lat, double** lon, PyArrayOb
                 for(int j=minx; j<maxx; j++)
                 {
                    //odata[i*width+j] = pixArea; 
-                    *((float*)PyArray_GETPTR2(odata,i,j)) = pixArea;
+                    *((float*)PyArray_GETPTR2(odata,i,j)) = 1.;//pixArea;
+                    //printf("%d,%d : %f\n",i,j,pixArea/pixArea);
                 }
             }
         }
         else if(intArea==0)//if none overlap stop processing
         {
+            printf("%d,%d - %d,%d\n",minx,miny,maxx,maxy);
             return;
         }
         else
         {
-            if(psint == NULL)
+            /*if(psint == NULL)
             {
                 psint = shape;
+            }*/
+            if(psint != NULL)
+            {
+                //split the group of pixels into 4 quandrants and recompute
+                processArea(psint,lat,lon,tdata,odata,width,height,pixArea,minx,                  miny,                  minx+std::max(1,(int)(deltax/2.0)),miny+std::max(1,(int)(deltay/2.0)));
+                
+                processArea(psint,lat,lon,tdata,odata,width,height,pixArea,(int)(minx+deltax/2.0),miny,                  maxx,                  miny+std::max(1,(int)(deltay/2.0)));
+                
+                processArea(psint,lat,lon,tdata,odata,width,height,pixArea,(int)(minx+deltax/2.0),(int)(miny+deltay/2.0),maxx,                  maxy);
+                
+                processArea(psint,lat,lon,tdata,odata,width,height,pixArea,minx,                  (int)(miny+deltay/2.0),minx+std::max(1,(int)(deltax/2.0)),maxy);
+
+                delete psint;
             }
-            //split the group of pixels into 4 quandrants and recompute
-            processArea(psint,lat,lon,tdata,odata,width,height,pixArea,minx,                  miny,                  (int)(minx+deltax/2.0),(int)(miny+deltay/2.0));
-            processArea(psint,lat,lon,tdata,odata,width,height,pixArea,(int)(minx+deltax/2.0),miny,                  maxx,                  (int)(miny+deltay/2.0));
-            processArea(psint,lat,lon,tdata,odata,width,height,pixArea,(int)(minx+deltax/2.0),(int)(miny+deltay/2.0),maxx,                  maxy);
-            processArea(psint,lat,lon,tdata,odata,width,height,pixArea,minx,                  (int)(miny+deltay/2.0),(int)(minx+deltax/2.0),maxy);
         }
     }
+}
+
+void TraceExterior(OGRPolygon* pg, int* buffer, double** lat, double** lon, const int height, const int width, const int si, const int sj, const int id)
+{
+    int ci = si;
+    int cj = sj;
+    int cval;
+    int cval2;
+    
+    OGRLinearRing pixelRing;
+    bool notfirst = true;
+    
+    int t = 0;
+    int face = 0;
+    int f=0;
+    //printf("start: %d,%d\n",si,sj);
+    do
+    {
+        //printf("sf: %d\n",face);
+        for(f=0;f<4;f++)
+        {
+            //look left
+            if((face + f)%4 == 0)
+            {
+                if(t>0 && ci==si && cj==sj)
+                {
+                    f += 1;
+                    break;
+                }
+                
+                //printf("left\n");
+                if(cj==0)
+                {
+                    cval = 0;
+                    cval2 = 0;
+                }
+                else
+                {
+                    cval = buffer[height*ci+cj-1];
+                    if(ci==0)
+                    {
+                        cval2=0;
+                    }
+                    else
+                    {
+                        cval2 = buffer[height*(ci-1)+cj-1];
+                    }
+                }
+                
+                
+                if(cval == id)
+                {
+                    cj -= 1;
+                    break;
+                }
+                else
+                {
+                    if(notfirst)
+                    {
+                        pixelRing.addPoint(lon[ci+1][cj],lat[ci+1][cj]);
+                    }
+                    notfirst = true;
+                    pixelRing.addPoint(lon[ci][cj],lat[ci][cj]);
+                    
+                    if(cj!=0)
+                    {
+                        buffer[height*ci+cj-1] = -id; 
+                    }
+                    
+                    if(cval2 == id)
+                    {
+                        ci -= 1;
+                        cj -= 1;
+                        break;
+                    }
+                }
+            }
+            else if((face + f)%4 == 1)
+            {
+                //printf("up\n");
+                //look up
+                if(ci==0)
+                {
+                    cval = 0;
+                    cval2 = 0;
+                }
+                else
+                {
+                    cval = buffer[height*(ci-1)+cj];
+                    if(cj==width-1)
+                    {
+                        cval2=0;
+                    }
+                    else
+                    {
+                        cval2 = buffer[height*(ci-1)+cj+1];
+                    }
+                }
+                
+                if(cval == id)
+                {
+                    ci -= 1;
+                    break;
+                }
+                else
+                {
+                    if(notfirst)
+                    {
+                        pixelRing.addPoint(lon[ci][cj],lat[ci][cj]);
+                    }
+                    notfirst = true;
+                    pixelRing.addPoint(lon[ci][cj+1],lat[ci][cj+1]);
+                    
+                    if(ci!=0)
+                    {
+                        buffer[height*(ci-1)+cj] = -id; 
+                    }
+                    
+                    if(cval2 == id)
+                    {
+                        ci -= 1;
+                        cj += 1;
+                        break;
+                    }
+                }
+            }
+            else if((face + f)%4 == 2)
+            {
+                //printf("right\n");
+                //look right
+                if(cj==width-1)
+                {
+                    cval = 0;
+                    cval2 = 0;
+                }
+                else
+                {
+                    cval = buffer[height*ci+cj+1];
+                    if(ci==height-1)
+                    {
+                        cval2=0;
+                    }
+                    else
+                    {
+                        cval2 = buffer[height*(ci+1)+cj+1];
+                    }
+                }
+                
+                if(cval == id)
+                {
+                    cj += 1;
+                    break;
+                }
+                else
+                {
+                    if(notfirst)
+                    {
+                        pixelRing.addPoint(lon[ci][cj+1],lat[ci][cj+1]);
+                    }
+                    notfirst = true;
+                    pixelRing.addPoint(lon[ci+1][cj+1],lat[ci+1][cj+1]);
+                    
+                    if(cj!=width-1)
+                    {
+                        buffer[height*ci+cj+1] = -id; 
+                    }
+                    
+                    if(cval2 == id)
+                    {
+                        ci += 1;
+                        cj += 1;
+                        break;
+                    }
+                }
+            }
+            else if((face + f)%4 == 3)
+            {
+                //printf("down\n");
+                //look down
+                if(ci==height-1)
+                {
+                    cval = 0;
+                    cval2 = 0;
+                }
+                else
+                {
+                    cval = buffer[height*(ci+1)+cj];
+                    if(cj==0)
+                    {
+                        cval2=0;
+                    }
+                    else
+                    {
+                        cval2 = buffer[height*(ci+1)+cj-1];
+                    }
+                }
+                
+                if(cval == id)
+                {
+                    ci += 1;
+                    break;
+                }
+                else
+                {
+                    if(notfirst)
+                    {
+                        pixelRing.addPoint(lon[ci+1][cj+1],lat[ci+1][cj+1]);
+                    }
+                    pixelRing.addPoint(lon[ci+1][cj],lat[ci+1][cj]);
+        
+                    if(ci!=height-1)
+                    {
+                        buffer[height*(ci+1)+cj] = -id; 
+                    }
+                    
+                    if(cval2 == id)
+                    {
+                        ci += 1;
+                        cj -= 1;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        face = (face + f +3)%4;
+        
+        notfirst = false;
+        //printf("\n%d,%d\n",ci,cj);
+        t++;
+    }
+    while(ci != si || cj != sj || face != 0);
+    //printf("Done\n");
+    
+    pixelRing.closeRings();
+    //printf("Closed\n");
+    
+    pg->addRing(&pixelRing);
+    //printf("Added\n");
+}
+
+void TraceInterior(OGRPolygon* pg, int* buffer, double** lat, double** lon, const int height, const int width, const int si, const int sj, const int id, const int sf)
+{
+    int ci = si;
+    int cj = sj;
+    int cval;
+    int cval2;
+    
+    OGRLinearRing pixelRing;
+    bool notfirst = true;
+    
+    int t = 0;
+    int face = sf;
+    int f=0;
+    //printf("start: %d,%d\n",si,sj);
+    //printf("sf: %d\n",face);
+    do
+    {
+        for(f=0;f<4;f++)
+        {
+            if(t>0 && ci==si && cj==sj && (face + f)%4 == sf)
+            {
+                f += 1;
+                break;
+            }
+            
+            //look left
+            if((face + f)%4 == 0)
+            {
+                
+                //printf("left\n");
+                if(cj==0)
+                {
+                    cval = 0;
+                    cval2 = 0;
+                }
+                else
+                {
+                    cval = buffer[height*ci+cj-1];
+                    if(ci==0)
+                    {
+                        cval2=0;
+                    }
+                    else
+                    {
+                        cval2 = buffer[height*(ci-1)+cj-1];
+                    }
+                }
+                
+                
+                if(cval == id)
+                {
+                    cj -= 1;
+                    break;
+                }
+                else
+                {
+                    if(notfirst)
+                    {
+                        pixelRing.addPoint(lon[ci+1][cj],lat[ci+1][cj]);
+                    }
+                    notfirst = true;
+                    pixelRing.addPoint(lon[ci][cj],lat[ci][cj]);
+                    
+                    if(cj!=0)
+                    {
+                        buffer[height*ci+cj-1] = -id; 
+                    }
+                    
+                    if(cval2 == id)
+                    {
+                        ci -= 1;
+                        cj -= 1;
+                        break;
+                    }
+                }
+            }
+            else if((face + f)%4 == 1)
+            {
+                //printf("up\n");
+                //look up
+                if(ci==0)
+                {
+                    cval = 0;
+                    cval2 = 0;
+                }
+                else
+                {
+                    cval = buffer[height*(ci-1)+cj];
+                    if(cj==width-1)
+                    {
+                        cval2=0;
+                    }
+                    else
+                    {
+                        cval2 = buffer[height*(ci-1)+cj+1];
+                    }
+                }
+                
+                if(cval == id)
+                {
+                    ci -= 1;
+                    break;
+                }
+                else
+                {
+                    if(notfirst)
+                    {
+                        pixelRing.addPoint(lon[ci][cj],lat[ci][cj]);
+                    }
+                    notfirst = true;
+                    pixelRing.addPoint(lon[ci][cj+1],lat[ci][cj+1]);
+                    
+                    if(ci!=0)
+                    {
+                        buffer[height*(ci-1)+cj] = -id; 
+                    }
+                    
+                    if(cval2 == id)
+                    {
+                        ci -= 1;
+                        cj += 1;
+                        break;
+                    }
+                }
+            }
+            else if((face + f)%4 == 2)
+            {
+                //printf("right\n");
+                //look right
+                if(cj==width-1)
+                {
+                    cval = 0;
+                    cval2 = 0;
+                }
+                else
+                {
+                    cval = buffer[height*ci+cj+1];
+                    if(ci==height-1)
+                    {
+                        cval2=0;
+                    }
+                    else
+                    {
+                        cval2 = buffer[height*(ci+1)+cj+1];
+                    }
+                }
+                
+                if(cval == id)
+                {
+                    cj += 1;
+                    break;
+                }
+                else
+                {
+                    if(notfirst)
+                    {
+                        pixelRing.addPoint(lon[ci][cj+1],lat[ci][cj+1]);
+                    }
+                    notfirst = true;
+                    pixelRing.addPoint(lon[ci+1][cj+1],lat[ci+1][cj+1]);
+                    
+                    if(cj!=width-1)
+                    {
+                        buffer[height*ci+cj+1] = -id; 
+                    }
+                    
+                    if(cval2 == id)
+                    {
+                        ci += 1;
+                        cj += 1;
+                        break;
+                    }
+                }
+            }
+            else if((face + f)%4 == 3)
+            {
+                //printf("down\n");
+                //look down
+                if(ci==height-1)
+                {
+                    cval = 0;
+                    cval2 = 0;
+                }
+                else
+                {
+                    cval = buffer[height*(ci+1)+cj];
+                    if(cj==0)
+                    {
+                        cval2=0;
+                    }
+                    else
+                    {
+                        cval2 = buffer[height*(ci+1)+cj-1];
+                    }
+                }
+                
+                if(cval == id)
+                {
+                    ci += 1;
+                    break;
+                }
+                else
+                {
+                    if(notfirst)
+                    {
+                        pixelRing.addPoint(lon[ci+1][cj+1],lat[ci+1][cj+1]);
+                    }
+                    pixelRing.addPoint(lon[ci+1][cj],lat[ci+1][cj]);
+        
+                    if(ci!=height-1)
+                    {
+                        buffer[height*(ci+1)+cj] = -id; 
+                    }
+                    
+                    if(cval2 == id)
+                    {
+                        ci += 1;
+                        cj -= 1;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        face = (face + f +3)%4;
+        
+        notfirst = false;
+        //printf("\n%d,%d\n",ci,cj);
+        t++;
+    }
+    while(ci != si || cj != sj || face != sf);
+    //printf("Done\n");
+    
+    pixelRing.closeRings();
+    //printf("Closed\n");
+    
+    pg->addRing(&pixelRing);
+    //printf("Added\n");
+}
+
+void TraceInteriors(OGRPolygon* pg, int* buffer, std::list<std::pair<int,int>> &edgelist, double** lat, double** lon, const int height, const int width, const int id)
+{
+    int ci;
+    int cj;
+    
+    while(edgelist.size()>0)
+    {
+        ci = edgelist.front().first;
+        cj = edgelist.front().second;
+        edgelist.pop_front();
+        
+        if(buffer[height*ci+cj]>-id && buffer[height*ci+cj]<=0)//not processed yet and freespace
+        {
+            int sf = 0;
+            
+            if(ci>0 && buffer[height*(ci-1)+cj] == id)
+            {
+                //start up
+                 TraceInterior(pg,buffer,lat,lon,height,width,ci-1,cj,id,3);
+            }
+            else if(ci<height-1 && buffer[height*(ci+1)+cj] == id)
+            {
+                //start down
+                TraceInterior(pg,buffer,lat,lon,height,width,ci+1,cj,id,1);
+            }
+            else if(cj>0 && buffer[height*ci+cj-1] == id)
+            {
+                //start left
+                TraceInterior(pg,buffer,lat,lon,height,width,ci,cj-1,id,2);
+            }
+            else if(cj<width-1 && buffer[height*ci+cj+1] == id)
+            {
+                //start right
+                TraceInterior(pg,buffer,lat,lon,height,width,ci,cj+1,id,0);
+            }
+            else
+            {
+                printf("Error: Couldn't Find Adjacent Polygon ID %d\n",id);
+            }           
+        }
+    }
+}
+
+void FloodFill(int* buffer,std::list<std::pair<int,int>> &edgelist,const int height,const int width,const int i,const int j,const int id)
+{
+    int ci = i;
+    int cj = j;
+    int cval;
+    
+    std::list<std::pair<int,int>> nextpixel;
+    
+    nextpixel.emplace_back(ci,cj);
+    buffer[height*ci+cj] = id;
+    
+    while(nextpixel.size()>0)
+    {
+        ci = nextpixel.front().first;
+        cj = nextpixel.front().second;
+        //printf("FF: %d,%d R:%d\n",ci,cj,nextpixel.size());
+        
+        nextpixel.pop_front();
+        
+        //up
+        if(ci>0)
+        {
+            cval = buffer[height*(ci-1)+cj];
+            if(cval == 1)
+            {
+                buffer[height*(ci-1)+cj] = id;
+                nextpixel.emplace_back(ci-1,cj);
+            }
+            else if(cval == 0)
+            {
+                edgelist.emplace_back(ci-1,cj);
+            }
+        }
+        
+        //down
+        if(ci<height-1)
+        {
+            cval = buffer[height*(ci+1)+cj];
+            if(cval == 1)
+            {
+                buffer[height*(ci+1)+cj] = id;
+                nextpixel.emplace_back(ci+1,cj);
+            }
+            else if(cval == 0)
+            {
+                edgelist.emplace_back(ci+1,cj);
+            }
+        }
+        
+        //left
+        if(cj>0)
+        {
+            cval = buffer[height*ci+cj-1];
+            if(cval == 1)
+            {
+                buffer[height*ci+cj-1] = id;
+                nextpixel.emplace_back(ci,cj-1);
+            }
+            else if(cval == 0)
+            {
+                edgelist.emplace_back(ci,cj-1);
+            }
+        }
+        
+        //right
+        if(cj<width-1)
+        {
+            cval = buffer[height*ci+cj+1];
+            if(cval == 1)
+            {
+                buffer[height*ci+cj+1] = id;
+                nextpixel.emplace_back(ci,cj+1);
+            }
+            else if(cval == 0)
+            {
+                edgelist.emplace_back(ci,cj+1);
+            }
+        }
+    }
+}
+
+OGRGeometry* mask2polygon(double** lat, double** lon, PyArrayObject* mask, const int width, const int height)
+{
+    int* buffer = new int[height*width];
+    
+    for(int i=0;i<height;i++)
+    {
+        for(int j=0;j<width;j++)
+        {
+            buffer[height*i+j] = *((bool*)PyArray_GETPTR2(mask,i,j));
+        }
+    }
+    
+    OGRMultiPolygon* mp = new OGRMultiPolygon();
+    
+    int id = 2;
+    
+    for(int i=0;i<height;i++)
+    {
+        for(int j=0;j<width;j++)
+        {
+            if(buffer[height*i+j] == 1) //start a new polygon
+            {
+                OGRPolygon* pg = new OGRPolygon();
+                std::list<std::pair<int,int>> edgelist;
+                
+                //floodfill to find interiors
+                FloodFill(buffer,edgelist,height,width,i,j,id);
+                
+                //trace the exterior
+                TraceExterior(pg,buffer,lat,lon,height,width,i,j,id);
+                
+                //printf("%d edges to check for id %d\n",edgelist.size(),id);
+                
+                //trace interiors
+                TraceInteriors(pg,buffer,edgelist,lat,lon,height,width,id);
+                
+                
+                id++;
+                
+                mp->addGeometry(pg);
+                delete pg;
+                
+                //if(id>3)break;
+            }
+        }
+        //break;
+    }
+    
+    return mp;
 }
 
 /**
@@ -186,8 +861,8 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
         
         for(int j=0;j<=width;j++)
         {
-            lon[i][j] = *((float*)PyArray_GETPTR1(transform,0)) + *((float*)PyArray_GETPTR1(transform,1))*j + *((float*)PyArray_GETPTR1(transform,2))*i;
-            lat[i][j] = *((float*)PyArray_GETPTR1(transform,3)) + *((float*)PyArray_GETPTR1(transform,4))*j + *((float*)PyArray_GETPTR1(transform,5))*i;
+            lon[i][j] = *((double*)PyArray_GETPTR1(transform,0)) + *((double*)PyArray_GETPTR1(transform,1))*j + *((double*)PyArray_GETPTR1(transform,2))*i;
+            lat[i][j] = *((double*)PyArray_GETPTR1(transform,3)) + *((double*)PyArray_GETPTR1(transform,4))*j + *((double*)PyArray_GETPTR1(transform,5))*i;
         }
     }
     
@@ -211,14 +886,14 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     processArea(shape,lat,lon,transform,outdata,width,height,pixelArea,0,0,width,height);
     
     //normalize areas
-    for(int i=0;i<height;i++)
+    /*for(int i=0;i<height;i++)
     {
         for(int j=0;j<width;j++)
         {
             //odata[i*width+j] /= pixelArea;
             *((float*)PyArray_GETPTR2(outdata,i,j)) /= pixelArea;
         }
-    }
+    }*/
     
     //memory cleanup
     OGRGeometryFactory::destroyGeometry(shape);
@@ -242,6 +917,73 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     }
     
     //return data
+    return Py_BuildValue("N",(PyObject*)outdata); 
+}
+
+/**
+ * Convert boolean mask into polygon
+ */
+static PyObject * polygonize(PyObject *self, PyObject *args)
+{
+    PyArrayObject *transform;
+    PyArrayObject *mask;
+    int height, width;
+    double pixelArea;
+    double** lat = NULL;
+    double** lon = NULL;
+    
+    //get arguments
+    if (!PyArg_ParseTuple(args, "O!O!ii", &PyArray_Type,&transform,&PyArray_Type,&mask,&width,&height))
+    {
+        return NULL;
+    }
+    
+    //check for errors
+    if (transform==NULL || mask == NULL)
+    {
+        PyErr_SetString(PyExc_ValueError,"Invalid input arguments.");
+        return NULL;
+    }
+    
+    //initialize lat/lon coords for all pixel corners
+    lat = new double*[height+1];
+    lon = new double*[height+1];
+    
+    for(int i=0;i<=height;i++)
+    {
+        lat[i] = new double[width+1];
+        lon[i] = new double[width+1];
+        
+        for(int j=0;j<=width;j++)
+        {
+            lon[i][j] = *((float*)PyArray_GETPTR1(transform,0)) + *((float*)PyArray_GETPTR1(transform,1))*j + *((float*)PyArray_GETPTR1(transform,2))*i;
+            lat[i][j] = *((float*)PyArray_GETPTR1(transform,3)) + *((float*)PyArray_GETPTR1(transform,4))*j + *((float*)PyArray_GETPTR1(transform,5))*i;
+        }
+    }
+    
+    OGRGeometry* result = mask2polygon(lat, lon, mask, width, height);
+    
+    /*if(!result->IsValid())
+    {
+       OGRGeometry* fixed = OGRGeometry::MakeValid(result);//result->MakeValid();
+       delete result;
+       result = fixed;
+    }*/
+    
+    if(result == nullptr)
+    {
+        Py_INCREF(Py_None);
+        return Py_None;
+    }
+    
+    //create the output data array
+    npy_intp dimensions[1] = {result->WkbSize()};
+    PyArrayObject* outdata = (PyArrayObject*)PyArray_ZEROS(1,dimensions,PyArray_BYTE,0);
+    
+    result->exportToWkb(wkbXDR,(uint8_t*)PyArray_GETPTR1(outdata,0));
+    
+    delete result;
+    
     return Py_BuildValue("N",(PyObject*)outdata); 
 }
 
@@ -354,6 +1096,7 @@ static PyMethodDef shape_methods[] =
 {
     {"shapeSlice",shapeSlice, METH_VARARGS, "Get a boolean array indexing the intersection of a raster and a shape"},
     {"shapeTransform",shapeTransform,METH_VARARGS, "Translate a shape from one projection into another"},
+    {"polygonize",polygonize,METH_VARARGS,"Convert boolean mask into polygon"},
     {NULL, NULL, 0, NULL}
 };
 
