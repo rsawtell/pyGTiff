@@ -1123,7 +1123,7 @@ class geotiff:
         else:
             raise ValueError("mask should be 2 dimensional")
         
-        wkb = p_(np.array(gt,dtype=np.float32),mask,self.width,self.height)
+        wkb = p_(np.array(gt,dtype=np.float64),mask,self.width,self.height)
         
         return wkb
             
