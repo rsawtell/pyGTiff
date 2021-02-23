@@ -826,6 +826,7 @@ class geotiff:
                 smallest - smallest subset is chosen (round up the lower bound, round down the upper) 
                 largest - largest subset is chosen (round down the lower, round up the upper) (default)
                 nearest - indices are rounded to the nearest integer value
+            bands2use: list of bands to include (default: all of them), usefull for large datasets when you aren't using all bands
             
         Returns:
             A geotiff instance of the subset area and the adjusted pixel coordinates used to extract the subset'''
@@ -926,6 +927,7 @@ class geotiff:
                 smallest - smallest subset is chosen (round up the lower bound, round down the upper) 
                 largest - largest subset is chosen (round down the lower, round up the upper) (default)
                 nearest - indices are rounded to the nearest integer value
+            bands2use: list of bands to include (default: all of them), usefull for large datasets when you aren't using all bands
             
         Returns:
             A geotiff instance of the subset area and the adjusted pixel coordinates used to extract the subset'''
@@ -1101,34 +1103,49 @@ class geotiff:
             raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
         
     def polygonizeMask(self,mask):
-        ''''''
-        #try:
-        from pyGTiff.shape import polygonize as p_
+        '''Convert boolean mask to vector Polygon or MultiPolygon.
         
-        if self.geoTransform is None:
-            gt = (0,1,0,0,0,1)
-        else:
-            gt = self.geoTransform
+        If the image does not have a geoTransform defined the returned vector
+        will be in image coordinates rather than projected coordinates.
+        
+        Args:
+            mask: a 2d numpy boolean array matching the size of this image
+                  pixel values of 1 will be included in the polygon/multipolygon
+                  
+        Returns:
+            Well Known Binary String of the vectorized mask. Will be a valid
+            polygon or multipolygon.
             
-        if isinstance(mask,np.ma.masked_array):
-            mask = mask.data
-        
-        if not isinstance(mask,np.ndarray) or mask.dtype != np.bool:
-            raise TypeError("mask should be numpy Boolean array")
-        
-        #check that dimensions match
-        if mask.ndim==2:
-            if not (mask.shape[0] == self.height and mask.shape[1] == self.width):
-                raise ValueError("mask shape must match image dimensions")
-        else:
-            raise ValueError("mask should be 2 dimensional")
-        
-        wkb = p_(np.array(gt,dtype=np.float64),mask,self.width,self.height)
-        
-        return wkb
+        Raises:
+            NotImplementedError: if the C++ libraries are missing or broken
+'''
+        try:
+            from pyGTiff.shape import polygonize as p_
             
-        #except ImportError:
-        #    raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
+            if self.geoTransform is None:
+                gt = (0,1,0,0,0,1)
+            else:
+                gt = self.geoTransform
+                
+            if isinstance(mask,np.ma.masked_array):
+                mask = mask.data
+            
+            if not isinstance(mask,np.ndarray) or mask.dtype != np.bool:
+                raise TypeError("mask should be numpy Boolean array")
+            
+            #check that dimensions match
+            if mask.ndim==2:
+                if not (mask.shape[0] == self.height and mask.shape[1] == self.width):
+                    raise ValueError("mask shape must match image dimensions")
+            else:
+                raise ValueError("mask should be 2 dimensional")
+            
+            wkb = p_(np.array(gt,dtype=np.float64),mask,self.width,self.height)
+            
+            return wkb
+            
+        except ImportError:
+            raise NotImplementedError("You must build the supplementary C++ module to enable this method.")
             
         
     def getPixelArea(self):
