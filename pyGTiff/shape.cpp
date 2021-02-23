@@ -77,10 +77,6 @@ static void processArea(OGRGeometry* shape,GridLat& lat, GridLon& lon, PyArrayOb
     //construct a polygon representing a cluster of pixels from the raster
     OGRLinearRing pixelRing;
     
-    //pixelRing.addPoint(lon[miny][minx],lat[miny][minx]);
-    //pixelRing.addPoint(lon[miny][maxx],lat[miny][maxx]);
-    //pixelRing.addPoint(lon[maxy][maxx],lat[maxy][maxx]);
-    //pixelRing.addPoint(lon[maxy][minx],lat[maxy][minx]);
     pixelRing.addPoint(lon(miny,minx),lat(miny,minx));
     pixelRing.addPoint(lon(miny,maxx),lat(miny,maxx));
     pixelRing.addPoint(lon(maxy,maxx),lat(maxy,maxx));
@@ -116,27 +112,20 @@ static void processArea(OGRGeometry* shape,GridLat& lat, GridLon& lon, PyArrayOb
         else if(psint->getGeometryType()==wkbGeometryCollection)
         {
             intArea = ((OGRGeometryCollection*)psint)->get_Area();
-            //printf("%d,%d - %d,%d\n",minx,miny,maxx,maxy);
         }
     }
     else
     {
-        //printf("%d,%d - %d,%d --\n",minx,miny,maxx,maxy);
         return;
     }
-    
-    //printf("%d,%d - %d,%d %f\n",minx,miny,maxx,maxy,intArea/regionArea);
     
     //if only one pixel, record the area of overlap
     if(deltax==1 && deltay==1)
     {
-        //odata[miny*width+minx] = intArea;
         *((float*)PyArray_GETPTR2(odata,miny,minx)) = intArea/regionArea;
-        //printf(">%d,%d -> %d,%d : %f -- %f\n",miny,minx,maxy,maxx,intArea/pixArea,regionArea/pixArea);
     }
     else
     {
-        //printf("%d,%d :: %d,%d R:%f I:%f  %d\n",minx,maxx,miny,maxy,regionArea/pixArea,intArea/pixArea,regionArea==intArea);
         //if the entire set of pixels is contained within the polygon, record them all as max area per pixel
         if(regionArea==intArea)
         {
@@ -144,23 +133,16 @@ static void processArea(OGRGeometry* shape,GridLat& lat, GridLon& lon, PyArrayOb
             {
                 for(int j=minx; j<maxx; j++)
                 {
-                   //odata[i*width+j] = pixArea; 
                     *((float*)PyArray_GETPTR2(odata,i,j)) = 1.;//pixArea;
-                    //printf("%d,%d : %f\n",i,j,pixArea/pixArea);
                 }
             }
         }
         else if(intArea==0)//if none overlap stop processing
         {
-            //printf("%d,%d - %d,%d\n",minx,miny,maxx,maxy);
             return;
         }
         else
         {
-            /*if(psint == NULL)
-            {
-                psint = shape;
-            }*/
             if(psint != NULL)
             {
                 //split the group of pixels into 4 quandrants and recompute
@@ -191,10 +173,9 @@ void TraceExterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
     int t = 0;
     int face = 0;
     int f=0;
-    //printf("start: %d,%d\n",si,sj);
+
     do
     {
-        //printf("sf: %d\n",face);
         for(f=0;f<4;f++)
         {
             //look left
@@ -206,7 +187,6 @@ void TraceExterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
                     break;
                 }
                 
-                //printf("left\n");
                 if(cj==0)
                 {
                     cval = 0;
@@ -255,7 +235,6 @@ void TraceExterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
             }
             else if((face + f)%4 == 1)
             {
-                //printf("up\n");
                 //look up
                 if(ci==0)
                 {
@@ -304,7 +283,6 @@ void TraceExterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
             }
             else if((face + f)%4 == 2)
             {
-                //printf("right\n");
                 //look right
                 if(cj==width-1)
                 {
@@ -353,7 +331,6 @@ void TraceExterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
             }
             else if((face + f)%4 == 3)
             {
-                //printf("down\n");
                 //look down
                 if(ci==height-1)
                 {
@@ -404,17 +381,13 @@ void TraceExterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
         face = (face + f +3)%4;
         
         notfirst = false;
-        //printf("\n%d,%d\n",ci,cj);
         t++;
     }
     while(ci != si || cj != sj || face != 0);
-    //printf("Done\n");
     
     pixelRing.closeRings();
-    //printf("Closed\n");
     
     pg->addRing(&pixelRing);
-    //printf("Added\n");
 }
 
 void TraceInterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, const int height, const int width, const int si, const int sj, const int id, const int sf)
@@ -430,8 +403,7 @@ void TraceInterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
     int t = 0;
     int face = sf;
     int f=0;
-    //printf("start: %d,%d\n",si,sj);
-    //printf("sf: %d\n",face);
+
     do
     {
         for(f=0;f<4;f++)
@@ -445,8 +417,6 @@ void TraceInterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
             //look left
             if((face + f)%4 == 0)
             {
-                
-                //printf("left\n");
                 if(cj==0)
                 {
                     cval = 0;
@@ -495,7 +465,6 @@ void TraceInterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
             }
             else if((face + f)%4 == 1)
             {
-                //printf("up\n");
                 //look up
                 if(ci==0)
                 {
@@ -544,7 +513,6 @@ void TraceInterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
             }
             else if((face + f)%4 == 2)
             {
-                //printf("right\n");
                 //look right
                 if(cj==width-1)
                 {
@@ -593,7 +561,6 @@ void TraceInterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
             }
             else if((face + f)%4 == 3)
             {
-                //printf("down\n");
                 //look down
                 if(ci==height-1)
                 {
@@ -644,17 +611,14 @@ void TraceInterior(OGRPolygon* pg, int* buffer, GridLat& lat, GridLon& lon, cons
         face = (face + f +3)%4;
         
         notfirst = false;
-        //printf("\n%d,%d\n",ci,cj);
+
         t++;
     }
     while(ci != si || cj != sj || face != sf);
-    //printf("Done\n");
     
     pixelRing.closeRings();
-    //printf("Closed\n");
     
     pg->addRing(&pixelRing);
-    //printf("Added\n");
 }
 
 void TraceInteriors(OGRPolygon* pg, int* buffer, std::list<std::pair<int,int>> &edgelist, GridLat& lat, GridLon& lon, const int height, const int width, const int id)
@@ -670,7 +634,6 @@ void TraceInteriors(OGRPolygon* pg, int* buffer, std::list<std::pair<int,int>> &
         
         if(buffer[width*ci+cj]>-id && buffer[width*ci+cj]<=0)//not processed yet and freespace
         {
-            int sf = 0;
             
             if(ci>0 && buffer[width*(ci-1)+cj] == id)
             {
@@ -715,7 +678,6 @@ void FloodFill(int* buffer,std::list<std::pair<int,int>> &edgelist,const int hei
     {
         ci = nextpixel.front().first;
         cj = nextpixel.front().second;
-        //printf("FF: %d,%d R:%d\n",ci,cj,nextpixel.size());
         
         nextpixel.pop_front();
         
@@ -785,18 +747,13 @@ OGRGeometry* mask2polygon(GridLat& lat, GridLon& lon, PyArrayObject* mask, const
 {
     int* buffer = new int[height*width];
     
-    //printf("hw: %d,%d\n",height,width);
-    
     for(int i=0;i<height;i++)
     {
         for(int j=0;j<width;j++)
         {
-            //printf("%d (%d)\n",width*i+j,height*width);
             buffer[width*i+j] = *((bool*)PyArray_GETPTR2(mask,i,j));
         }
     }
-    
-    //printf("HERE\n");
     
     OGRMultiPolygon* mp = new OGRMultiPolygon();
     
@@ -817,21 +774,15 @@ OGRGeometry* mask2polygon(GridLat& lat, GridLon& lon, PyArrayObject* mask, const
                 //trace the exterior
                 TraceExterior(pg,buffer,lat,lon,height,width,i,j,id);
                 
-                //printf("%d edges to check for id %d\n",edgelist.size(),id);
-                
                 //trace interiors
                 TraceInteriors(pg,buffer,edgelist,lat,lon,height,width,id);
-                
                 
                 id++;
                 
                 mp->addGeometry(pg);
                 delete pg;
-                
-                //if(id>3)break;
             }
         }
-        //break;
     }
     
     delete [] buffer;
@@ -847,9 +798,6 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     PyArrayObject *transform;
     PyArrayObject *shapebinary;//assumed to be in the same projection as the raster
     int height, width;
-    double pixelArea;
-    //double** lat = NULL;
-    //double** lon = NULL;
     
     //get arguments
     if (!PyArg_ParseTuple(args, "O!O!ii", &PyArray_Type,&transform,&PyArray_Type,&shapebinary,&width,&height))
@@ -874,7 +822,6 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
         return NULL;
     }
     
-    //printf("%d\n",shape->getGeometryType());
     if(!(shape->getGeometryType()==wkbPolygon || shape->getGeometryType()==wkbMultiPolygon || shape->getGeometryType()==wkbGeometryCollection))
     {
         OGRGeometryFactory::destroyGeometry(shape);
@@ -893,77 +840,14 @@ static PyObject * shapeSlice(PyObject *self, PyObject *args)
     npy_intp dimensions[2] = {height,width};
     PyArrayObject* outdata = (PyArrayObject*)PyArray_ZEROS(2,dimensions,PyArray_FLOAT,0);
     
-    //float* odata = (float*) PyArray_DATA(outdata);
-    //float* tdata = (float*) PyArray_DATA(transform);
-    
-    //initialize lat/lon coords for all pixel corners
-    /*lat = new double*[height+1];
-    lon = new double*[height+1];
-    
-    for(int i=0;i<=height;i++)
-    {
-        lat[i] = new double[width+1];
-        lon[i] = new double[width+1];
-        
-        for(int j=0;j<=width;j++)
-        {
-            lon[i][j] = *((double*)PyArray_GETPTR1(transform,0)) + *((double*)PyArray_GETPTR1(transform,1))*j + *((double*)PyArray_GETPTR1(transform,2))*i;
-            lat[i][j] = *((double*)PyArray_GETPTR1(transform,3)) + *((double*)PyArray_GETPTR1(transform,4))*j + *((double*)PyArray_GETPTR1(transform,5))*i;
-        }
-    }*/
-    
     GridLon lon(*((double*)PyArray_GETPTR1(transform,0)),*((double*)PyArray_GETPTR1(transform,1)),*((double*)PyArray_GETPTR1(transform,2)));
     GridLat lat(*((double*)PyArray_GETPTR1(transform,3)),*((double*)PyArray_GETPTR1(transform,4)),*((double*)PyArray_GETPTR1(transform,5)));
-    
-    //compute pixel area
-    /*OGRLinearRing pixelRing;
-    
-    pixelRing.addPoint(lon[0][0],lat[0][0]);
-    pixelRing.addPoint(lon[0][1],lat[0][1]);
-    pixelRing.addPoint(lon[1][1],lat[1][1]);
-    pixelRing.addPoint(lon[1][0],lat[1][0]);
-    
-    pixelRing.closeRings();
-    
-    OGRPolygon pixelPoly;
-    
-    pixelPoly.addRing(&pixelRing);
-    
-    pixelArea = pixelPoly.get_Area();*/
     
     //compute intersection of pixels and polygon
     processArea(shape,lat,lon,transform,outdata,width,height,0,0,width,height);
     
-    //normalize areas
-    /*for(int i=0;i<height;i++)
-    {
-        for(int j=0;j<width;j++)
-        {
-            //odata[i*width+j] /= pixelArea;
-            *((float*)PyArray_GETPTR2(outdata,i,j)) /= pixelArea;
-        }
-    }*/
-    
     //memory cleanup
     OGRGeometryFactory::destroyGeometry(shape);
-    
-    /*if(lat!=NULL)
-    {
-        for(int i=0;i<height;i++)
-        {
-            delete[] lat[i];
-        }
-        delete[] lat;
-    }
-    
-    if(lon!=NULL)
-    {
-        for(int i=0;i<height;i++)
-        {
-            delete[] lon[i];
-        }
-        delete[] lon;
-    }*/
     
     //return data
     return Py_BuildValue("N",(PyObject*)outdata); 
@@ -977,9 +861,6 @@ static PyObject * polygonize(PyObject *self, PyObject *args)
     PyArrayObject *transform;
     PyArrayObject *mask;
     int height, width;
-    double pixelArea;
-    //double** lat = NULL;
-    //double** lon = NULL;
     
     //get arguments
     if (!PyArg_ParseTuple(args, "O!O!ii", &PyArray_Type,&transform,&PyArray_Type,&mask,&width,&height))
@@ -997,16 +878,7 @@ static PyObject * polygonize(PyObject *self, PyObject *args)
     GridLon lon(*((double*)PyArray_GETPTR1(transform,0)),*((double*)PyArray_GETPTR1(transform,1)),*((double*)PyArray_GETPTR1(transform,2)));
     GridLat lat(*((double*)PyArray_GETPTR1(transform,3)),*((double*)PyArray_GETPTR1(transform,4)),*((double*)PyArray_GETPTR1(transform,5)));
     
-    //printf("Generating Geometry\n");
     OGRGeometry* result = mask2polygon(lat, lon, mask, width, height);
-    
-    /*if(!result->IsValid())
-    {
-       OGRGeometry* fixed = OGRGeometry::MakeValid(result);//result->MakeValid();
-       delete result;
-       result = fixed;
-    }*/
-    
     
     if(result == nullptr)
     {
@@ -1014,13 +886,9 @@ static PyObject * polygonize(PyObject *self, PyObject *args)
         return Py_None;
     }
     
-    //printf("Allocating WKB\n");
-    
     //create the output data array
     npy_intp dimensions[1] = {result->WkbSize()};
     PyArrayObject* outdata = (PyArrayObject*)PyArray_ZEROS(1,dimensions,PyArray_BYTE,0);
-    
-    //printf("Generating WKB\n");
     
     result->exportToWkb(wkbXDR,(uint8_t*)PyArray_GETPTR1(outdata,0));
     
