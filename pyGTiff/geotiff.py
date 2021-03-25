@@ -185,7 +185,7 @@ class geotiff:
                 self.height = inputTIF.shape[0]
                 self.bands=1
                 self.shape = (self.height,self.width)
-                self.data = np.array([inputTIF])
+                self.data = np.expand_dims(inputTIF,0)#np.array([inputTIF])
                 
             self.band = None
             self.geoTransform = None
